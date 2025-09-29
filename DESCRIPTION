@@ -1,0 +1,33 @@
+Package: analysis.codename
+Title: Cytoreason Analysis <Codename> Project
+Version: 0.0.0.9000
+Authors@R: 
+    person(given = "First",
+           family = "Last",
+           role = c("aut", "cre"),
+           email = "first.last@cytoreason.com")
+Description: Summary of the objectives of the project as well as some high-level details on 
+  the approach followed to answer the question of interest (one paragraph).
+License: CytoReason
+Encoding: UTF-8
+LazyData: true
+Depends: 
+  cytoreason (>= 1.2.10)
+  , devtools
+  , cytoreason.cc.client (>= 1.0.43)
+  , cytoreason.shared.assets (>= 1.2.8)
+  , cytoreason.project (>= 0.0.1)
+  , Biobase
+Imports:
+  utils,
+  stats,
+  assertthat,
+  cytoreason.io (>= 1.2.5)
+Suggests:
+  testthat
+  , roclets (>= 0.3.1)
+  , roxygen2 (>= 7.1.0)
+RoxygenNote: 7.1.0
+Roxygen: list(markdown = TRUE, roclets = c('collate', 'namespace', 'roclets::rd2_roclet'))
+biocViews: CytoReason
+PackageType: project
