@@ -6,9 +6,9 @@ library("cytoreason.validator.apps.client")
 library(dplyr)
 library(ggplot2)
 
-############################################################################################################################################
-#####              This code includes all pre-processing of Evommune data from validator stage until CCM services analysis             #####
-############################################################################################################################################
+#####################################################################################################################################
+#####     This code includes all pre-processing of Evommune 4hr experiment from validator stage until CCM services analysis     #####
+#####################################################################################################################################
 
 retrieve_me <- function(my_object = my_object ){
   return(my_object)
@@ -22,6 +22,9 @@ retrieve_me <- function(my_object = my_object ){
 s05_4hr_raw_eset = get_eset_from_dataset("s05_X2_RNAseq_4hr_single_2SlaF", "rnaseq")
 experimentID(s05_4hr_raw_eset) <- "s05_4hr"
 s05_4hr_raw_pData = pData(s05_4hr_raw_eset)
+cytoreason.cc.client::run_function_dist(retrieve_me, my_object = s05_4hr_raw_eset) # wf-cb183f8dad # SUCCEEDED
+s05_4hr_raw_eset = readRDS(get_workflow_outputs("wf-cb183f8dad"))
+
 
 ###############################################
 #             Meta-data handling              #
