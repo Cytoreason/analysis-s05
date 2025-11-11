@@ -17,68 +17,18 @@ refine_signatures = function(signatures) {
   return(signatures)
 }
 
+allSignatures = bq_table_download(x = bq_table(project = "cytoreason", dataset = "s05_atopic_dermatitis", table="X2Signatures"))
+allSignatures = split(allSignatures$feature_id, allSignatures$signature)                                  
 
-# 1. Top 50/100
-# -----------------------------
-x2_raw = readRDS(get_workflow_outputs("wf-ac3be6cf37"))$genes_only
-x2_inNet = refine_signatures(x2_raw)
-
+x2_inNet = refine_signatures(allSignatures)
 pushToCC(x2_inNet, tagsToPass = list(list(name = "object",value="X2_refined"),
-                                      list(name="network_propagation",value="none"),
-                                      list(name="origin",value="top")))
-# wf-3fe1dce17d
-
-
-# 2. Propagated in ARCHS
-# -----------------------------
-x2_archs = readRDS(get_workflow_outputs("wf-f5930577e9"))$genes
-x2_inNet = refine_signatures(x2_archs)
-
-pushToCC(x2_inNet, tagsToPass = list(list(name = "object",value="X2_refined"),
-                                     list(name="network_propagation",value="archs"),
-                                     list(name="origin",value="gxdiff")))
-# wf-3b31fba621
-
-
-# 3. Propagated in STRING
-# -----------------------------
-x2_string = readRDS(get_workflow_outputs("wf-ad41f5ce55"))$genes
-x2_inNet = refine_signatures(x2_string)
-
-pushToCC(x2_inNet, tagsToPass = list(list(name = "object",value="X2_refined"),
-                                     list(name="network_propagation",value="string"),
-                                     list(name="origin",value="gxdiff")))
-# wf-6fff51f9f7
-
-
-# 4. in-silico, propagated in ARCHS
-# -----------------------------
-x2_insilico_archs = readRDS(get_workflow_outputs("wf-6028a1f83b"))$genes
-x2_inNet = refine_signatures(x2_insilico_archs)
-
-pushToCC(x2_inNet, tagsToPass = list(list(name = "object",value="X2_refined"),
-                                     list(name="network_propagation",value="archs"),
-                                     list(name="origin",value="insilico")))
-# wf-7305f8adfa
-
-
-# 5. in-silico, propagated in STRING
-# -----------------------------
-x2_insilico_string = readRDS(get_workflow_outputs("wf-b6999b00da"))$genes
-x2_inNet = refine_signatures(x2_insilico_string)
-
-pushToCC(x2_inNet, tagsToPass = list(list(name = "object",value="X2_refined"),
-                                     list(name="network_propagation",value="string"),
-                                     list(name="origin",value="insilico")))
-# wf-843f67359a
-
-
-
+                                     list(name="network_propagation",value="string")))
+# wf-a3701a029e
 
 
 # 5. Append signatures to BQ
 # ------------------------------------
-append_signatures = function(wfid){
+append_signatures = function(wfid, rankingMetric){
   X2_Signatures = readRDS(get_workflow_outputs(wfid))
   signature_df = lapply(names(X2_Signatures), function(signature){
     x = X2_Signatures[[signature]]
@@ -89,13 +39,15 @@ append_signatures = function(wfid){
     x$signature = signature
     return(x)
   }) %>% bind_rows()
-  
-  new_cols <- setNames(rep(list(NA), 6), c("comparison", "fdr", "pvalue", "in_top50", "in_bottom50","estimate"))
+  signature_df$rankingMetric = rankingMetric
+  new_cols <- setNames(rep(list(NA), 5), c("comparison", "log10_fdr", "log10_pvalue", "in50","estimate"))
   
   signature_df = signature_df %>%
     mutate(!!!new_cols) %>%
-    mutate(gx_diff_wfid = wfid)
+    mutate(wfid = wfid)
 }
-archs_refined = append_signatures("wf-3b31fba621")
 
-uploadToBQ(archs_refined, bqdataset = "s05_atopic_dermatitis", tableName = "X2Signatures", disposition = "WRITE_APPEND")
+x2_refined = append_signatures("wf-a3701a029e", "refined")
+
+uploadToBQ(x2_refined, bqdataset = "s05_atopic_dermatitis", tableName = "X2Signatures", disposition = "WRITE_APPEND")
+

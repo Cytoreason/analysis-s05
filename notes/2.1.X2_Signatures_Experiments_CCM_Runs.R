@@ -250,19 +250,19 @@ FDRlabel <- x2_4h %>%
   slice(1) # Just one row per facet
 
 nSig = x2_4h %>%
-  dplyr::filter(fdr <= 0.05) %>%  # Select the leftmost column for each row
+  dplyr::filter(pvalue <= 0.05) %>%  # Select the leftmost column for each row
   group_by(comparison, term) %>%
   mutate(nSigGenes = n()) %>%
   slice(1) # Just one row per facet
 
-four = ggplot(x2_4h, aes(x = estimate, y = log10_fdr)) +
-  geom_point(aes(color = ifelse(log10_fdr >= -log10(0.05),"black","grey80"))) +
+four = ggplot(x2_4h, aes(x = estimate, y = log10_pvalue)) +
+  geom_point(aes(color = ifelse(log10_pvalue >= -log10(0.05),"black","grey80"))) +
   geom_hline(yintercept = -log10(0.05), linetype = "dashed") +
-  geom_text(data = FDRlabel, x = 6, y = 1.35, label = "FDR = 0.05", check_overlap = T, size = 3, hjust= "right") +
-  geom_text(data = nSig, x = 3, y=2.2, aes(label=paste0("n=",nSigGenes)), check_overlap = T, size = 3, hjust = "left")+
+  geom_text(data = FDRlabel, x = 3, y = 1.1, label = "pvalue = 0.05", check_overlap = T, size = 3, hjust= "left") +
+  geom_text(data = nSig, x = 0, y=6.5, aes(label=paste0("n=",nSigGenes)), check_overlap = T, size = 3, hjust = "left")+
   scale_color_identity() +
   scale_x_continuous(name = "estimate (log2 Fold Change)", sec.axis = dup_axis(name = "Agonist"))+
-  scale_y_continuous(name = "-log10(FDR)", sec.axis = dup_axis(name = "Comparison"))+
+  scale_y_continuous(name = "-log10(p-value)", sec.axis = dup_axis(name = "Comparison"))+
   facet_grid(cols = vars(agonist), rows = vars(term)) +
   theme_bw() +
   theme(axis.ticks.x.top = element_blank(), axis.line.x.top = element_blank(), axis.text.x.top = element_blank(),
@@ -276,19 +276,19 @@ FDRlabel <- x2_24h %>%
   slice(1) # Just one row per facet
 
 nSig = x2_24h %>%
-  dplyr::filter(fdr <= 0.05) %>%  # Select the leftmost column for each row
+  dplyr::filter(pvalue <= 0.05) %>%  # Select the leftmost column for each row
   group_by(comparison, term) %>%
   mutate(nSigGenes = n()) %>%
   slice(1) # Just one row per facet
 
-twentyfour = ggplot(x2_24h, aes(x = estimate, y = log10_fdr)) +
-  geom_point(aes(color = ifelse(log10_fdr >= -log10(0.05),"black","grey80"))) +
+twentyfour = ggplot(x2_24h, aes(x = estimate, y = log10_pvalue)) +
+  geom_point(aes(color = ifelse(log10_pvalue >= -log10(0.05),"black","grey80"))) +
   geom_hline(yintercept = -log10(0.05), linetype = "dashed") +
-  geom_text(data = FDRlabel, x = 7, y = 1.35, label = "FDR = 0.05", check_overlap = T, size = 3, hjust= "right") +
-  geom_text(data = nSig, x = 5, y=1.8, aes(label=paste0("n=",nSigGenes)), check_overlap = T, size = 3, hjust = "left")+
+  geom_text(data = FDRlabel, x = 7, y = 1.1, label = "pvalue = 0.05", check_overlap = T, size = 3, hjust= "right") +
+  geom_text(data = nSig, x = 5, y=6, aes(label=paste0("n=",nSigGenes)), check_overlap = T, size = 3, hjust = "left")+
   scale_color_identity() +
   scale_x_continuous(name = "estimate (log2 Fold Change)", sec.axis = dup_axis(name = "Agonist"))+
-  scale_y_continuous(name = "-log10(FDR)", sec.axis = dup_axis(name = "Comparison"))+
+  scale_y_continuous(name = "-log10(p-value)", sec.axis = dup_axis(name = "Comparison"))+
   facet_grid(cols = vars(agonist), rows = vars(term)) +
   theme_bw() +
   theme(axis.ticks.x.top = element_blank(), axis.line.x.top = element_blank(), axis.text.x.top = element_blank(),
@@ -297,6 +297,9 @@ twentyfour = ggplot(x2_24h, aes(x = estimate, y = log10_fdr)) +
 # twentyfour
 
 four/twentyfour
+ggsave("~/analysis-s05/figures/X2_Signature/Experiments_Signal_pvalue.png", width = 800, height = 900, units = "px", dpi = 96)
+
+
 
 # clean envir
 rm(twentyfour, four, FDRlabel, nSig, x2_24h, x2_4h, gx)

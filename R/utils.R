@@ -36,23 +36,22 @@ pushToCC <- function(obj, filename = "output", data_access = "s05", tagsToPass =
 #' @note important: make sure there are no special characters anywhere in table column names or in the table or else it will fail.
 #' The only allowed special character is _.
 #' @note a table bigger than 1 million rows will be uploaded in chunks of 1 million rows
-#' @param wfid - a data.frame/data.table, workflow ID or address of file in cytoCC of a table we want to upload, e.g. "wf-3lk24l3nrlk32n:2:path/to/sub-directory/or/file"
+#' @param table - a data.frame/data.table, workflow ID or address of file in cytoCC of a table we want to upload, e.g. "wf-3lk24l3nrlk32n:2:path/to/sub-directory/or/file"
 #' @param bqdataset - name of dataset in BQ we want to upload to
 #' @param tableName - the name we want to call the table in BQ - no special characters other than _
 #' @param subsetting - if the wfid outputs a list, this will use the element in the list specified.
 #' @param disposition - specific write_disposition specification. Default is "WRITE_TRUNCATE"
-uploadToBQ = function(wfid, bqdataset, tableName, subsetting = NULL, disposition = "WRITE_TRUNCATE"){
+uploadToBQ = function(table, bqdataset, tableName, subsetting = NULL, disposition = "WRITE_TRUNCATE"){
   # if(!require(bigquery)) BiocManager::install("bigquery")
   library(bigrquery)
   # options(cache = TRUE, cache.lazy = FALSE)
   
-  if(is.character(wfid)){
-    cat("\nUploading",wfid,"to",bqdataset,"\n")
-    table = cytoreason.ccm.pipeline::read_asset(wfid, quiet = T)
-  } else {
-    table = wfid
+  if(is.character(table)){
+    cat("\nUploading",table,"to",bqdataset,"\n")
+    table = cytoreason.ccm.pipeline::read_asset(table, quiet = T)
+    cat("\nData loaded\n")
   }
-  cat("\nData loaded\n")
+  
   if(length(subsetting == "NULL") == 0) { subsetting = NULL }
   
   if(!is.null(subsetting)){
@@ -70,25 +69,34 @@ uploadToBQ = function(wfid, bqdataset, tableName, subsetting = NULL, disposition
     sapply(parts, function(i){
       cat("\nuploading chunk",i,"-",(i+1e6-1))
       if(i == 1){
-        bq_perform_upload(bq_table("cytoreason",bqdataset,table=tableName),
+        job = bq_perform_upload(bq_table("cytoreason",bqdataset,table=tableName),
                           table[i:(i+1e6-1),], write_disposition = disposition)
       } else if(i == parts[length(parts)]) { # last part
         cat("\ruploading chunk",i,"-",nrow(table))
-        bq_perform_upload(bq_table("cytoreason",bqdataset,table=tableName),
+        job = bq_perform_upload(bq_table("cytoreason",bqdataset,table=tableName),
                           table[i:nrow(table),], write_disposition = "write_append")
       } else {
-        bq_perform_upload(bq_table("cytoreason",bqdataset,table=tableName),
+        job = bq_perform_upload(bq_table("cytoreason",bqdataset,table=tableName),
                           table[i:(i+1e6-1),], write_disposition = "write_append")
       }
       gc(verbose = F)
     })
   } else { # upload all at once
-    bq_perform_upload(x = bq_table("cytoreason",bqdataset,table=tableName), values = table, write_disposition = disposition)
+    job = bq_perform_upload(x = bq_table("cytoreason",bqdataset,table=tableName), values = table, write_disposition = disposition)
   }
-  cat("\nData uploaded\n")
+  
+  bq_job_wait(job)
+  status <- bq_job_status(job)
+  
+  if (!is.null(status$errorResult)) {
+    stop(paste("BigQuery upload failed:", status$errorResult$message))
+  } else {
+    message("Upload completed successfully.")
+  }
   gc()
   rm(table)
 }
+
 
 
 
