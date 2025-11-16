@@ -8,7 +8,7 @@ library(bigrquery)
 # Combine to one object to be run on CCM
 # =======================================================
 allSignatures = bq_table_download(x = bq_table(project = "cytoreason", dataset = "s05_atopic_dermatitis", table="X2Signatures"))
-allSignatures = split(allSignatures$feature_id, allSignatures$signature)                                  
+allSignatures = split(allSignatures$feature_id, allSignatures$signature)
 pushToCC(allSignatures, tagsToPass = list(list(name="object",value="allSignatures")))
 # wf-30b7952de4
 
@@ -27,173 +27,67 @@ pushToCC(allSignatures, tagsToPass = list(list(name="object",value="allSignature
 # Overlap graphs
 # ===============================
 ann = function(signatures){
-  df = data.frame(row.names = signatures, 
-                  agonist = sapply(signatures, function(x) strsplit(x,"_")[[1]][1]),
-                  treatment = str_extract(signatures,"activation|inhibition|insilico"), 
-                  refined = str_extract(signatures,"refined"),
-                  prop = str_extract(signatures,"archs|string"))
-  
+  df = data.frame(row.names = names(signatures),
+                  # agonist = sapply(names(signatures), function(x) str_split(x," ")[[1]][1]),
+                  treatment = str_extract(names(signatures),"activation|inhibition"),
+                  refined = str_extract(names(signatures),"refined"))
+
   ann_colors = list(
-    agonist = c("x2" = "#003f5c", "Untreated" = "#374c80", "CST14" = "#7a5195","Icatibant" = "#bc5090", "PAMP12" = "#ef5675", "SP" = "#ff764a", "aIgE" = "#ffa600"),  # replace with actual agonist names
-    treatment = c("activation" = "orange", "inhibition" = "purple", "insilico" = "gray"),
-    refined = c("refined" = "black", "NA" = "white"),  # handle NA if needed
-    prop = c("archs" = "cyan", "string" = "magenta")
+    # agonist = c("x2" = "#003f5c", "Untreated" = "#374c80", "CST14" = "#7a5195","Icatibant" = "#bc5090", "PAMP12" = "#ef5675", "SP" = "#ff764a", "aIgE" = "#ffa600"),  # replace with actual agonist names
+    treatment = c("activation" = "orange", "inhibition" = "purple"),
+    refined = c("refined" = "black", "NA" = "white")  # handle NA if needed
   )
-  
+
   ann = HeatmapAnnotation(df = df, which = "row", col = ann_colors)
 }
 
-# 50/100
-allSignatures = readRDS(get_workflow_outputs("wf-afc8c28587"))
-estimate = allSignatures[!str_detect(names(allSignatures),"_p")]
-estimate_50 = estimate[str_detect(names(estimate),"50")]
-estimate_100 = estimate[str_detect(names(estimate),"100")]
+reconstruct_signature_name = function(sig){
+  signature = str_split(sig, "_")[[1]]
+  new_sig = c(signature[1],signature[3],signature[2])
+  if("refined" %in% signature) {
+    new_sig = c(new_sig, "(refined)")
+  }
+  return(paste0(new_sig, collapse = " "))
+}
 
-overlap_50 = sapply(estimate_50, function(x) sapply(estimate_50, function(y) length(intersect(x,y))))
-overlap_100 = sapply(estimate_100, function(x) sapply(estimate_100, function(y) length(intersect(x,y))))
+allSignatures = readRDS(get_workflow_outputs("wf-30b7952de4"))
+signatures = allSignatures[str_detect(names(allSignatures),"50")]
+signatures = signatures[!str_detect(names(signatures), "string|archs(?!_)|p_refined|top100|bottom100")]
+signatures = signatures[str_detect(names(signatures),"_p")]
+signatures = signatures[!str_detect(names(signatures), "IgE_inhibition|CST14_inhibition|Icatibant_inhibition|PAMP12_inhibition|SP_inhibition_early|Untreated_inhibition")]
 
-ann_50 = ann(rownames(overlap_50))
-png("~/analysis-s05/figures/X2_Signature/overlap_50_estimate.png", res = "100", bg = "transparent", width = 1200, height = 900)
-Heatmap(overlap_50, name = "overlap", row_names_gp = gpar(fontsize = 8),
-        column_names_gp = gpar(fontsize=8), cell_fun = function(j, i, x, y, width, height, fill) {
-        if(overlap_50[i, j] >= 25) grid.text(overlap_50[i, j], x, y, gp = gpar(fontsize = 8))}, right_annotation = ann_50)
-dev.off()
+hm.signatures = signatures
+names(hm.signatures) = lapply(names(hm.signatures), reconstruct_signature_name)
 
-ann_100 = ann(rownames(overlap_100))
-png("~/analysis-s05/figures/X2_Signature/overlap_100_estimate.png", res = "100", bg = "transparent", width = 1200, height = 900)
-Heatmap(overlap_100, name = "overlap", row_names_gp = gpar(fontsize = 8),
-        column_names_gp = gpar(fontsize=8), cell_fun = function(j, i, x, y, width, height, fill) {
-          if(overlap_100[i, j] >= 25) grid.text(overlap_100[i, j], x, y, gp = gpar(fontsize = 8))})
-dev.off()
+activation = hm.signatures[str_detect(names(hm.signatures),"activation")]
+inhibition = hm.signatures[str_detect(names(hm.signatures),"inhibition")]
 
-# activation/inhibition
-activation = allSignatures[str_detect(names(allSignatures),"activation")]
-inhibition = allSignatures[str_detect(names(allSignatures),"inhibition")]
-
+overlap = sapply(hm.signatures, function(x) sapply(hm.signatures, function(y) length(intersect(x,y))))
 overlap_activation = sapply(activation, function(x) sapply(activation, function(y) length(intersect(x,y))))
 overlap_inhibition = sapply(inhibition, function(x) sapply(inhibition, function(y) length(intersect(x,y))))
 
-png("~/analysis-s05/figures/X2_Signature/overlap_activation.png", res = "100", bg = "transparent", width = 1200, height = 900)
-Heatmap(overlap_activation, name = "overlap", row_names_gp = gpar(fontsize = 8),
-        column_names_gp = gpar(fontsize=8), cell_fun = function(j, i, x, y, width, height, fill) {
-          if(overlap_activation[i, j] >= 25) grid.text(overlap_activation[i, j], x, y, gp = gpar(fontsize = 8))})
-dev.off()
-
-png("~/analysis-s05/figures/X2_Signature/overlap_inhibition.png", res = "100", bg = "transparent", width = 1200, height = 900)
-Heatmap(overlap_inhibition, name = "overlap", row_names_gp = gpar(fontsize = 8),
-        column_names_gp = gpar(fontsize=8), cell_fun = function(j, i, x, y, width, height, fill) {
-          if(overlap_inhibition[i, j] >= 25) grid.text(overlap_inhibition[i, j], x, y, gp = gpar(fontsize = 8))})
+# all signatures
+png("~/analysis-s05/figures/X2_Signature/overlap.png", res = "100", bg = "transparent", width = 900, height = 700)
+Heatmap(overlap, name = "overlap", row_names_gp = gpar(fontsize = 10), right_annotation = ann(signatures),
+        column_names_gp = gpar(fontsize=10), cell_fun = function(j, i, x, y, width, height, fill) {
+          if(overlap[i, j] >= 25) grid.text(overlap[i, j], x, y, gp = gpar(fontsize = 10))})
 dev.off()
 
 
-
-# Which genes joined from the network
-# --------------------------------------------
-sigs = bq_table_download(x = bq_table(project = "cytoreason", dataset = "s05_atopic_dermatitis", table="X2Signatures"))
-sigs = split(sigs$feature_id, sigs$signature)                                  
-sigs = sigs[!str_detect(names(sigs),"_p")]
-mcs = sigs[!str_detect(names(sigs),"archs|string|refined")]
-archs = sigs[str_detect(names(sigs),"archs")] %>%
-  .[!str_detect(names(.),"refined")]
-archs_refined = sigs[str_detect(names(sigs),"archs")] %>%
-  .[str_detect(names(.),"refined")]
-string = sigs[str_detect(names(sigs),"string")] %>%
-  .[!str_detect(names(.),"refined")]
-string_refined = sigs[str_detect(names(sigs),"string")] %>%
-  .[str_detect(names(.),"refined")]
-
-results <- data.frame(signature = character(),
-                      existed = integer(),
-                      new = integer(),
-                      percent_new = numeric(),
-                      stringsAsFactors = FALSE)
-
-for (sig in names(mcs)) {
-  original_genes <- mcs[[sig]]
-  propagated_genes <- archs[[paste0(sig, "_archs")]]
-  
-  existed <- sum(original_genes %in% propagated_genes)
-  new <- sum(!(propagated_genes %in% original_genes))
-  percent_new <- round((new / existed) * 100, 0)
-  
-  results <- rbind(results, data.frame(
-    signature = sig, existed = existed, new = new, percent_new = percent_new, stringsAsFactors = FALSE))
-}
-
-results = reshape2::melt(results, id.vars = c(1,4), variable.name = "origin", value.name = "n")
-results$origin = factor(results$origin, ordered = T, levels = c("new","existed"))
-results$ep = ifelse(str_detect(results$signature,"_ep"),"estimate x logP","estimate")
-results$sigsize = ifelse(str_detect(results$signature,"_50"),"n=50","n=100")
-results$signature = str_remove(results$signature, "_50|_100")
-
-p1 = ggplot(results, aes(x = n, y = signature, fill = origin)) +
-  geom_col(position = "stack") +
-  geom_text(aes(label = n), position = position_stack(vjust = 0.5), color = "black") +
-  scale_fill_manual(values = c("#FFD265","#0A7B83"))+
-  scale_x_continuous(expand = c(0,0))+
-  theme_minimal() +
-  facet_grid(rows = vars(ep), cols = vars(sigsize), scales="free") +
-  labs(title = "Number of genes added from the ARCHS network", x = "Number of genes", y = "Signature")
-
-p2 = ggplot(results[which(results$origin == "existed"),], aes(x = percent_new, y = signature)) +
-  geom_col(fill = "grey") +
-  geom_text(aes(label = paste0(percent_new, "%")), hjust = -0.1, check_overlap = T, color = "black") +
-  scale_x_continuous(expand = c(0,0), limits = c(0,100))+
-  theme_minimal() +
-  facet_grid(rows = vars(ep), cols = vars(sigsize), scales="free") +
-  theme(axis.ticks.y = element_blank(), axis.title.y = element_blank(), axis.text.y = element_blank()) +
-  labs(x = "% New Genes", title = " ")
-
-p1 + p2 + plot_layout(guides = "collect", widths = c(8,1)) & theme(legend.position = "right")
-ggsave("~/analysis-s05/figures/X2_Signature/gene_origin_archs.png", width = 2400, height = 1500, units = "px", scale = 2, bg = "white")
-
-# for string
-results <- data.frame(signature = character(),
-                      existed = integer(),
-                      new = integer(),
-                      percent_new = numeric(),
-                      stringsAsFactors = FALSE)
-
-for (sig in names(mcs)) {
-  original_genes <- mcs[[sig]]
-  propagated_genes <- string[[paste0(sig, "_string")]]
-  
-  existed <- sum(original_genes %in% propagated_genes)
-  new <- sum(!(propagated_genes %in% original_genes))
-  percent_new <- round((new / existed) * 100, 0)
-  
-  results <- rbind(results, data.frame(
-    signature = sig, existed = existed, new = new, percent_new = percent_new, stringsAsFactors = FALSE))
-}
-
-results = reshape2::melt(results, id.vars = c(1,4), variable.name = "origin", value.name = "n")
-results$origin = factor(results$origin, ordered = T, levels = c("new","existed"))
-results$ep = ifelse(str_detect(results$signature,"_ep"),"estimate x logP","estimate")
-results$sigsize = ifelse(str_detect(results$signature,"_50"),"n=50","n=100")
-results$signature = str_remove(results$signature, "_50|_100")
-
-p1 = ggplot(results, aes(x = n, y = signature, fill = origin)) +
-  geom_col(position = "stack") +
-  geom_text(aes(label = n), position = position_stack(vjust = 0.5), color = "black") +
-  scale_fill_manual(values = c("#FFD265","#0A7B83"))+
-  scale_x_continuous(expand = c(0,0))+
-  theme_minimal() +
-  facet_grid(rows = vars(ep), cols = vars(sigsize), scales="free") +
-  labs(title = "Number of genes added from the STRING network", x = "Number of genes", y = "Signature")
-
-p2 = ggplot(results[which(results$origin == "existed"),], aes(x = percent_new, y = signature)) +
-  geom_col(fill = "grey") +
-  geom_text(aes(label = paste0(percent_new, "%")), hjust = -0.1, check_overlap = T, color = "black") +
-  scale_x_continuous(expand = c(0,0), limits = c(0,100))+
-  theme_minimal() +
-  facet_grid(rows = vars(ep), cols = vars(sigsize), scales="free") +
-  theme(axis.ticks.y = element_blank(), axis.title.y = element_blank(), axis.text.y = element_blank()) +
-  labs(x = "% New Genes", title = " ")
-
-p1 + p2 + plot_layout(guides = "collect", widths = c(8,1)) & theme(legend.position = "right")
-ggsave("~/analysis-s05/figures/X2_Signature/gene_origin_string.png", width = 2400, height = 1500, units = "px", scale = 2, bg = "white")
+# activation
+png("~/analysis-s05/figures/X2_Signature/overlap_activation.png", res = "100", bg = "transparent", width = 900, height = 700)
+Heatmap(overlap_activation, name = "overlap", row_names_gp = gpar(fontsize = 10),
+        column_names_gp = gpar(fontsize=10), cell_fun = function(j, i, x, y, width, height, fill) {
+          if(overlap_activation[i, j] >= 25) grid.text(overlap_activation[i, j], x, y, gp = gpar(fontsize = 10))})
+dev.off()
 
 
+# inhibition
+png("~/analysis-s05/figures/X2_Signature/overlap_inhibition.png", res = "100", bg = "transparent", width = 900, height = 700)
+Heatmap(overlap_inhibition, name = "overlap", row_names_gp = gpar(fontsize = 10),
+        column_names_gp = gpar(fontsize=10), cell_fun = function(j, i, x, y, width, height, fill) {
+          if(overlap_inhibition[i, j] >= 25) grid.text(overlap_inhibition[i, j], x, y, gp = gpar(fontsize = 10))})
+dev.off()
 
 
 
@@ -222,65 +116,29 @@ compare_gene_loss <- function(original_list, refined_list, suffix) {
   return(results)
 }
 
-results <- rbind(compare_gene_loss(mcs, archs_refined, "_archs_refined"),
-                 compare_gene_loss(archs, archs_refined, "_refined"))
-results$sig = ifelse(!str_detect(results$signature,"archs"),"MCS","ARCHS")
-results$signature = str_remove(results$signature, "_archs")
-results$sigsize = ifelse(str_detect(results$signature,"_50"),"n=50","n=100")
-results$signature = str_remove(results$signature, "_50|_100")
-results$ep = ifelse(str_detect(results$signature,"_ep"),"estimate x logP","estimate")
+mcs = signatures[!str_detect(names(signatures),"refined")]
+archs_refined = signatures[str_detect(names(signatures),"refined")]
+
+results <- compare_gene_loss(mcs, archs_refined, "_archs_refined")
+results$sig = ifelse(!str_detect(results$signature,"archs"),"Mast Cell\nSpecific","Refined")
+results$signature = sapply(results$signature, reconstruct_signature_name)
 
 p1 = ggplot(results, aes(x = lost, y = signature, fill = sig)) +
-  geom_col(position = "dodge") +
+  geom_col(position = "dodge", fill = "#0087c5") +
   geom_text(aes(label = lost), position = position_dodge(0.75), color = "black", hjust = 1.5, size = 3) +
-  scale_x_continuous(expand = c(0,2))+
-  scale_fill_manual(values = c("#FFD265","#0A7B83"))+
-  facet_grid(rows = vars(ep), cols = vars(sigsize), scales="free") +
+  scale_x_continuous(expand = c(0.01,0), limits = c(-50,0))+
+  scale_fill_identity()+
   theme_minimal() +
   labs(title = "Number of genes lost in the refinement", x = "Number of genes lost", y = "Signature", fill = "signature\norigin")
 
 p2 = ggplot(results, aes(x = percent_lost, y = signature, fill = sig)) +
-  geom_col(position = "dodge") +
+  geom_col(position = "dodge", fill = "#8abfe7") +
   geom_text(aes(label = paste0(percent_lost, "%"), group = sig), size = 3, position = position_dodge(0.85), hjust = -0.1, check_overlap = T, color = "black") +
   scale_x_continuous(expand = c(0,0), limits = c(0,100))+
-  scale_fill_manual(values = c("#f7deb1","#a5bfc1"))+
+  scale_fill_identity()+
   theme_minimal() +
-  facet_grid(rows = vars(ep), cols = vars(sigsize), scales="free") +
   theme(axis.ticks.y = element_blank(), axis.title.y = element_blank(), axis.text.y = element_blank()) +
   labs(x = "% Lost Genes", title = " ", fill="lost from\nwhich\nsignature")
 
-p1 + p2 + plot_layout(guides = "collect", widths = c(8,1)) & theme(legend.position = "right")
-ggsave("~/analysis-s05/figures/X2_Signature/genes_lost_in_refinement_archs.png", width = 2000, height = 1200, units = "px", scale = 2.8, bg = "white", )
-
-
-## string
-results <- rbind(compare_gene_loss(mcs, string_refined, "_string_refined"),
-                 compare_gene_loss(string, string_refined, "_refined"))
-results$sig = ifelse(!str_detect(results$signature,"string"),"MCS","STRING")
-results$signature = str_remove(results$signature, "_string")
-results$sigsize = ifelse(str_detect(results$signature,"_50"),"n=50","n=100")
-results$signature = str_remove(results$signature, "_50|_100")
-results$ep = ifelse(str_detect(results$signature,"_ep"),"estimate x logP","estimate")
-
-p1 = ggplot(results, aes(x = lost, y = signature, fill = sig)) +
-  geom_col(position = "dodge") +
-  geom_text(aes(label = lost), position = position_dodge(0.75), color = "black", hjust = 1.5, size = 3) +
-  scale_x_continuous(expand = c(0,2))+
-  scale_fill_manual(values = c("#FFD265","#0A7B83"))+
-  facet_grid(rows = vars(ep), cols = vars(sigsize), scales="free") +
-  theme_minimal() +
-  labs(title = "Number of genes lost in the refinement", x = "Number of genes lost", y = "Signature", fill = "signature\norigin")
-
-p2 = ggplot(results, aes(x = percent_lost, y = signature, fill = sig)) +
-  geom_col(position = "dodge") +
-  geom_text(aes(label = paste0(percent_lost, "%"), group = sig), size = 3, position = position_dodge(0.85), hjust = -0.1, check_overlap = T, color = "black") +
-  scale_x_continuous(expand = c(0,0), limits = c(0,100))+
-  scale_fill_manual(values = c("#f7deb1","#a5bfc1"))+
-  theme_minimal() +
-  facet_grid(rows = vars(ep), cols = vars(sigsize), scales="free") +
-  theme(axis.ticks.y = element_blank(), axis.title.y = element_blank(), axis.text.y = element_blank()) +
-  labs(x = "% Lost Genes", title = " ", fill="lost from\nwhich\nsignature")
-
-p1 + p2 + plot_layout(guides = "collect", widths = c(8,1)) & theme(legend.position = "right")
-ggsave("~/analysis-s05/figures/X2_Signature/genes_lost_in_refinement_string.png", width = 2000, height = 1200, units = "px", scale = 2.8, bg = "white", )
-
+p1 + p2 + plot_layout(guides = "collect", widths = c(8,1.7)) & theme(legend.position = "right")
+ggsave("~/analysis-s05/figures/X2_Signature/genes_lost_in_refinement.png", width = 1000, height = 500, units = "px", scale = 2.7, bg = "white", )
