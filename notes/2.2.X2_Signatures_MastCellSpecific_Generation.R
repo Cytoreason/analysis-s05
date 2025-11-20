@@ -99,6 +99,10 @@ generate_signatures <- function(activation_list, inhibition_list, agonists, rank
 ### ==============================================
 # Generate all activation/inhibition datasets
 # ---------------------------------------------
+<<<<<<< Updated upstream
+=======
+gxdiff = gxdiff[-which(gxdiff$agonist %in% c("All_4hr","All_24hr") & gxdiff$term == "inhibited_vs_uninhibited"),]
+>>>>>>> Stashed changes
 activation_list <- map(ranking_methods, ~get_top_genes(gxdiff, "activated_vs_unactivated", "descending", .x$col, "top"))
 inhibition_list <- map(ranking_methods, ~get_top_genes(gxdiff, "inhibited_vs_uninhibited", "ascending", .x$col, "bottom"))
 activation <- dplyr::bind_rows(activation_list, .id = "rankingMetric") %>%
@@ -133,6 +137,10 @@ X2_Signatures <- lapply(X2_Signatures, function(x) x[lengths(x) > 0])
 # -----------------------
 pushToCC(X2_Signatures, tagsToPass = list(list(name="object",value="X2Signatures")))
 # wf-712302a4c4
+<<<<<<< Updated upstream
+=======
+# wf-8509e99d66
+>>>>>>> Stashed changes
 
 signature_df = lapply(X2_Signatures$genes_and_estimates, function(x){
   enframe(x, name = "feature_id", value = "estimate")
@@ -140,10 +148,15 @@ signature_df = lapply(X2_Signatures$genes_and_estimates, function(x){
   mutate(rankingMetric = case_when(str_detect(signature, "_p") ~ "pvalue",
                                    str_detect(signature, "_ep") ~ "estimate_logp",
                                    .default = "estimate")) %>%
-  mutate(wfid = "wf-712302a4c4")
+  mutate(wfid = "wf-8509e99d66")
 
 signatures = merge(signature_df, allTopGenes, by.x = c("feature_id", "estimate","rankingMetric"), by.y = c("feature_id","estimate","rankingMetric"))
 uploadToBQ(signatures, bqdataset = "s05_atopic_dermatitis", tableName = "X2Signatures")
 pushToCC(signatures, tagsToPass = list(list(name="object",value="X2Signatures_all_top_genes")))
+<<<<<<< Updated upstream
 # wf-5b45a8e1bc
 
+=======
+# wf-a3f816eb59
+# wf-2527603eb4
+>>>>>>> Stashed changes

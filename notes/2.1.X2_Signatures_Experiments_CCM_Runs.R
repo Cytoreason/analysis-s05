@@ -211,8 +211,12 @@ apply(allOptions, 1, function(x){
 
 gx_binded = do.call(rbind, gx)
 gsa_binded = do.call(rbind, gsa)
-uploadToBQ(gx_binded, bqdataset = "s05_atopic_dermatitis", tableName = "X2Signatures_gxdiff") # wf-edcade5c80
-uploadToBQ(gsa_binded, bqdataset = "s05_atopic_dermatitis", tableName = "X2Signatures_gxgsea") # wf-9429788f8a
+uploadToBQ(gx_binded, bqdataset = "s05_atopic_dermatitis", tableName = "X2Signatures_gxdiff")
+# wf-edcade5c80
+# wf-a121700ef7
+uploadToBQ(gsa_binded, bqdataset = "s05_atopic_dermatitis", tableName = "X2Signatures_gxgsea")
+# wf-9429788f8a
+# wf-765f884da8
 
 gx_binded$term = droplevels(gx_binded$term)
 

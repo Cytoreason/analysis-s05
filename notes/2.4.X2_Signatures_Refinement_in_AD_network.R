@@ -18,13 +18,13 @@ refine_signatures = function(signatures) {
 }
 
 allSignatures = bq_table_download(x = bq_table(project = "cytoreason", dataset = "s05_atopic_dermatitis", table="X2Signatures"))
+allSignatures = allSignatures[!str_detect(allSignatures$signature,"Tryptase_50"),]
 allSignatures = split(allSignatures$feature_id, allSignatures$signature)                                  
 
 x2_inNet = refine_signatures(allSignatures)
-pushToCC(x2_inNet, tagsToPass = list(list(name = "object",value="X2_refined"),
-                                     list(name="network_propagation",value="string")))
+pushToCC(x2_inNet, tagsToPass = list(list(name = "object",value="X2_refined")))
 # wf-a3701a029e
-
+# wf-7d3612d412
 
 # 5. Append signatures to BQ
 # ------------------------------------
@@ -47,7 +47,7 @@ append_signatures = function(wfid, rankingMetric){
     mutate(wfid = wfid)
 }
 
-x2_refined = append_signatures("wf-a3701a029e", "refined")
+x2_refined = append_signatures("wf-7d3612d412", "refined")
 
 uploadToBQ(x2_refined, bqdataset = "s05_atopic_dermatitis", tableName = "X2Signatures", disposition = "WRITE_APPEND")
 

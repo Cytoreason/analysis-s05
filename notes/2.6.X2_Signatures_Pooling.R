@@ -10,7 +10,12 @@ library(bigrquery)
 allSignatures = bq_table_download(x = bq_table(project = "cytoreason", dataset = "s05_atopic_dermatitis", table="X2Signatures"))
 allSignatures = split(allSignatures$feature_id, allSignatures$signature)
 pushToCC(allSignatures, tagsToPass = list(list(name="object",value="allSignatures")))
+<<<<<<< Updated upstream
 # wf-30b7952de4
+=======
+# wf-b645de563d
+# wf-6d9a2c3a80
+>>>>>>> Stashed changes
 
 nc = readRDS(get_workflow_outputs("wf-905e97fa64"))
   nc$smoothedRandom = lapply(nc$smoothedRandom, function(x) names(x))
@@ -21,7 +26,12 @@ nc = readRDS(get_workflow_outputs("wf-905e97fa64"))
 allSignatures = append(allSignatures, nc)
 pushToCC(allSignatures, tagsToPass = list(list(name="object",value="allSignatures"),
                                           list(name="notes",value="including_randoms")))
+<<<<<<< Updated upstream
 # wf-06b8b0617e
+=======
+# wf-f186bd29df
+# wf-50aa0d34a6
+>>>>>>> Stashed changes
 
 
 # Overlap graphs
@@ -50,11 +60,12 @@ reconstruct_signature_name = function(sig){
   return(paste0(new_sig, collapse = " "))
 }
 
-allSignatures = readRDS(get_workflow_outputs("wf-30b7952de4"))
+allSignatures = readRDS(get_workflow_outputs("wf-6d9a2c3a80"))
 signatures = allSignatures[str_detect(names(allSignatures),"50")]
-signatures = signatures[!str_detect(names(signatures), "string|archs(?!_)|p_refined|top100|bottom100")]
-signatures = signatures[str_detect(names(signatures),"_p")]
+signatures = signatures[!str_detect(names(signatures), "string|archs(?!_)|p_refined|top100|bottom100|50_refined")]
 signatures = signatures[!str_detect(names(signatures), "IgE_inhibition|CST14_inhibition|Icatibant_inhibition|PAMP12_inhibition|SP_inhibition_early|Untreated_inhibition")]
+signatures = signatures[!str_detect(names(signatures), "Tryptase")]
+signatures = signatures[!str_detect(names(signatures), "x2_inhibition_late")]
 
 hm.signatures = signatures
 names(hm.signatures) = lapply(names(hm.signatures), reconstruct_signature_name)

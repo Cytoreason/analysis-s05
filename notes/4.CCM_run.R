@@ -5,10 +5,15 @@ library(tidyverse)
 # 1. Inputs
 # -----------------------------
 ccm = as_ccm_fit("wf-08a6a0a503")
+<<<<<<< Updated upstream
 signatures = readRDS(get_workflow_outputs("wf-b33649db09"))
 ## make sure:
 ## A. removing the extra dataset
 ## all ligands is in entrez
+=======
+signatures = readRDS(get_workflow_outputs("wf-54d564beb9"))
+## removing the extra dataset isn't feasable within the contstraints of the project - need to re-run the disease model, causing compatibility issues
+>>>>>>> Stashed changes
 
 
 # 2. Molecular and clinical scores
@@ -75,6 +80,58 @@ ccm_api_run_custom_gene_set_analysis(ccm, # when using AssetData it will pull re
                                      tags = list(list(tissue="skin"),
                                                  list(condition="AD"),
                                                  list(project="evo"),
+<<<<<<< Updated upstream
                                                  list(name="analysis",value="X2_V1")),
                                      data_access = "s05")
 # generate_ccm -- Fri Nov 14 15:07:26 2025: wf-eafe4014ef []
+=======
+                                                 list(name="analysis",value="X2_V3")),
+                                     data_access = "s05")
+# generate_ccm -- Mon Nov 17 13:12:37 2025: wf-c022438e0b []
+# generate_ccm -- Mon Nov 17 15:31:47 2025: wf-ab6dd9441b [] - fixed ep
+# generate_ccm -- Tue Nov 18 09:12:32 2025: wf-67e687bf9f []
+# generate_ccm -- Thu Nov 20 07:54:00 2025: wf-5d25fa144d []
+
+########### This did not work due to using a legacy model
+## 2. Modify CCM
+## ===========================
+config = read.csv(get_task_inputs("wf-08a6a0a503", task_id = 0, files_names_grepl_pattern = "ccm-metadata"))
+config$ccm_exclude[which(config$experiment_id == "GSE147424")] <- 1
+config$asset_id[which(config$asset_id == "18057:adhoc:GSE153007.RDS")] <- "wf-381431a592:0:GSE153007.RDS"
+config$asset_id[which(config$asset_id == "18057:adhoc:GSE60709.RDS")] <- "wf-ff39d033df:0:GSE60709.RDS"
+
+ccm_stage_prepare_dataset_collection(config)
+ccm_api_generate_ccm(config = config,
+                     submodel = c("bulk", "adjusted__1__1"),
+                     image = "master_1.0.1",
+                     tags = list(list(tissue="skin"),
+                                 list(condition="AD"),
+                                 list(name="analysis",value="DiseaseModel_sansGSE147424")))
+# generate_ccm -- Mon Nov 17 08:03:09 2025: wf-ab6dd9441b []
+
+
+########### This did not work because it ran a network stage, and upon skipping threw a bunch of errors
+## Running the CCM
+## ----------------------
+UnifiedMetadata = readRDS(get_workflow_outputs("wf-e82a5ab3b6")) # from p13
+
+sample_annotation = merge(MS, UnifiedMetadata[,c("sample_id", "clinical_score_value_SCORAD", "clinical_score_value_EASI")], by = "sample_id", all = T)
+sample_annotation = sample_annotation %>%
+  rename(SCORAD = clinical_score_value_SCORAD, EASI = clinical_score_value_EASI)
+
+
+ccm_api_run_phenofeature_correlations(ccm, # when using AssetData it will pull relevant tags automatically, and makes the relationship traceable
+                                      custom_gene_set_collections = signatures,
+                                      stages = .skip("network"),
+                                      prepare_data = list(annotate = list(sample_annotation_table = sample_annotation)),
+                                      model = list(gx_gsa = list(collection_size_limits = gene_set_limits)),
+                                      meta = list(gx_diff = list(collection_size_limits = gene_set_limits)),
+                                      submodel = c("bulk", "adjusted__1__1"),
+                                      image = "master_1.0.1", 
+                                      tags = list(list(tissue="skin"),
+                                                  list(condition="AD"),
+                                                  list(project="evo"),
+                                                  list(name="analysis",value="X2_V2")),
+                                      data_access = "s05")
+# generate_ccm -- Mon Nov 17 11:45:22 2025: wf-789d36544f []
+>>>>>>> Stashed changes
