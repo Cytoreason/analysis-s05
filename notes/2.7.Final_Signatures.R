@@ -6,32 +6,13 @@ geneMapping = toTable(org.Hs.eg.db::org.Hs.egSYMBOL)
 
 ### 1. X2 signatures
 ### =======================
-<<<<<<< Updated upstream
-x2 = readRDS(get_workflow_outputs("wf-06b8b0617e"))
-x2 = x2[str_detect(names(x2), "50_p|nc_50|smoothedRandom")]
-x2 = x2[!str_detect(names(x2), "string|archs(?!_)|p_refined|top100|bottom100|x2_acti")]
-x2 = x2[!str_detect(names(x2), "IgE_inhibition|CST14_inhibition|Icatibant_inhibition|PAMP12_inhibition|SP_inhibition_early|Untreated_inhibition")]
-x2 = x2[!str_detect(names(x2),"(?:CST14|Icatibant|PAMP12|aIgE).*?_p_[^ ]+")]
-x2 = x2[!str_detect(names(x2),"^x2_(?:activation|inhibition)_late.*$")]
+x2 = readRDS(get_workflow_outputs("wf-2636758eaf"))
+x2 = x2[str_detect(names(x2), "50|nc_50|smoothedRandom")]
+x2 = x2[!str_detect(names(x2), "string|archs(?!_)|top100|bottom100|50_refined")]
+x2 = x2[!str_detect(names(x2), "IgE_general_inhibition|CST14_general_inhibition|Icatibant_general_inhibition|PAMP12_general_inhibition|SP_general_inhibition_early|Untreated_general_inhibition")]
 
 pushToCC(x2, tagsToPass = list(list(name="object",value="x2_signatures")))
-# wf-55420ff1cb
-=======
-x2 = readRDS(get_workflow_outputs("wf-50aa0d34a6"))
-# x2 = x2[str_detect(names(x2), "50_p|nc_50|smoothedRandom|_50_")]
-# x2 = x2[!str_detect(names(x2), "string|archs(?!_)|p_refined|top100|bottom100")]
-# x2 = x2[!str_detect(names(x2), "IgE_inhibition|CST14_inhibition|Icatibant_inhibition|PAMP12_inhibition|SP_inhibition_early|Untreated_inhibition|SP_activation_early_50_p_archs_refined")]
-# x2 = x2[!str_detect(names(x2),"(?:CST14|Icatibant|PAMP12|aIgE).*?_p_[^ ]+")]
-# x2 = x2[!str_detect(names(x2),"^x2_(?:activation|inhibition)_late.*$")]
-# x2 = x2[!str_detect(names(x2),"_ep|50_refined")]
-x2 = x2[str_detect(names(x2), "_50|MRGPRX|top50|bottom50")]
-x2 = x2[!str_detect(names(x2), "string")]
-x2 = x2[!str_detect(names(x2), "_archs(?!_)|50_refined")]
-
-pushToCC(x2, tagsToPass = list(list(name="object",value="x2_signatures")))
-# wf-1b6040f083
-# wf-f328b4a739
->>>>>>> Stashed changes
+# wf-e90c83f33a
 
 ### 2. in-silico signatures
 ### ============================
@@ -41,14 +22,13 @@ insilico <- cytoreason.assets::read_asset("ccw://wf-9329a6bc38@0:signatures_1880
 insilico = insilico[which(names(insilico) %in% sigs)] # DEFB103A not in the list
 
 all_ligands = append(list(all_ligands = sigs), insilico)
-all_ligands = geneMapping$gene_id[match(all_ligands, geneMapping$symbol)]
+all_ligands$all_ligands = geneMapping$gene_id[match(all_ligands$all_ligands, geneMapping$symbol)]
 pushToCC(all_ligands, tagsToPass = list(list(name="object",value="ligand_signatures")))
-# wf-f7e05ae87c
+# wf-0ee398830a
 
 
 ### 3. signature bank
 ### ============================
-
 signatureBank = bigrquery::bq_table_download(x = bigrquery::bq_table(project = "cytoreason",
                                                                      dataset = "p00_proj_patern_benchmark_public",
                                                                      table="p00_v2_signatures"))
@@ -77,7 +57,6 @@ signatures <- signatures %>%
 
 signatures = split(signatures$entrez, signatures$signature)
 pushToCC(signatures, tagsToPass = list(list(name="object",value="positiveControl_signatures")))
-# wf-49eee6a885
 # wf-3abe7c76cd
 
 ### 4. Itch signatures
@@ -122,42 +101,41 @@ mast_at = c("2182","27306","1359","64499","1511","2624","23430","4013","7177","9
 mast_crs <- cytoreason.deconvolution::SignatureCollection("gut_v9")
 mast_crs = mast_crs@gene_set[["CRCL_0000009"]]
 
-mast = list(mast_crs = mast_crs, mast_at = mast_at)
+# 5.3. Tryptase
+# ---------------------
+x2 = readRDS(get_workflow_outputs("wf-e90c83f33a")) %>% lapply(., as.character)
+mast_tryptase = x2[str_detect(names(x2),"tryptase")]
 
 
+mast = list(mast_crs = mast_crs, mast_at = mast_at, mast_tryptase = mast_tryptase$mast_tryptase_50)
 pushToCC(mast, tagsToPass = list(list(name="object",value="mast_signatures")))
-# wf-850ac449a7
+# wf-e4cf3d0777
 
 
 ### 6. Pooling all signatures
 ### ================================
-<<<<<<< Updated upstream
-x2 = readRDS(get_workflow_outputs("wf-55420ff1cb")) %>% lapply(., as.character)
-ligands = readRDS(get_workflow_outputs("wf-f7e05ae87c"))
-positives = readRDS(get_workflow_outputs("wf-49eee6a885")) %>% lapply(., as.character)
-itch = readRDS(get_workflow_outputs("wf-16fa7ba6c0"))
-mast = readRDS(get_workflow_outputs("wf-850ac449a7"))
-
-allSignatures = list(x2 = append(x2, append(ligands,positives)),
-                     mast = mast,
-                     itch = itch)
-
-pushToCC(allSignatures, tagsToPass = list(list(name="object",value="allSignatures")))
-# wf-b33649db09
-=======
-x2 = readRDS(get_workflow_outputs("wf-f328b4a739")) %>% lapply(., as.character)
-ligands = readRDS(get_workflow_outputs("wf-9ea3eeb42c"))
+x2 = readRDS(get_workflow_outputs("wf-e90c83f33a")) %>% lapply(., as.character)
+ligands = readRDS(get_workflow_outputs("wf-0ee398830a"))
 positives = readRDS(get_workflow_outputs("wf-3abe7c76cd")) %>% lapply(., as.character)
-itch = readRDS(get_workflow_outputs("wf-5f6ca4a13c"))
-mast = readRDS(get_workflow_outputs("wf-850ac449a7"))
+itch = readRDS(get_workflow_outputs("wf-16fa7ba6c0"))
+mast = readRDS(get_workflow_outputs("wf-e4cf3d0777"))
 
-nc = x2[str_detect(names(x2),"nc_|Random")]
+# allSignatures = list(x2 = c(x2, ligands,positives),
+#                      mast = mast,
+#                      itch = itch)
+# 
+# pushToCC(allSignatures, tagsToPass = list(list(name="object",value="allSignatures")))
+# # wf-b33649db09
+
+nc = x2[str_detect(names(x2),"nc_50|Random")]
   names(nc) = str_remove(names(nc),"nc_50.")
 x2 = x2[!str_detect(names(x2),"nc_|Random")]
-names(x2)[str_detect(names(x2),"Tryptase_50_smoothed")] <- "mast_tryptase"
-x2 = x2[!str_detect(names(x2),"x2_inhibition_late")]
+x2 = x2[!str_detect(names(x2),"tryptase")]
 
 names(positives) = str_remove(names(positives), "CytoSig_50Genes__Undivided__|P01__BioNetSmooth_signatures__|P03__Validations__|P07__CytoSig__")
+
+itch = itch[c("Yosipovitch.HM.AD.FC2.5","Jha.Sanofi.mouseGenes.skin")]
+names(itch) = c("Nattkemper","Jha")
 
 X2 = c(x2, ligands, positives, itch, mast)
 
@@ -165,35 +143,25 @@ allSignatures = list(X2 = X2,
                      negativeControls = nc)
 
 pushToCC(allSignatures, tagsToPass = list(list(name="object",value="allSignatures")))
-# wf-dffe62df1b
-# wf-54d564beb9
->>>>>>> Stashed changes
+# wf-b1950a97bd
 
 signatures.long = reshape2::melt(allSignatures)
 signatures.long = signatures.long[-which(duplicated(signatures.long[,2:3])),3:2] # keep only the signature name and collection
 colnames(signatures.long) = c("Target.Collection","Target.Identifier")
 signatures.long$feature_id = paste0(signatures.long$Target.Collection, "__", signatures.long$Target.Identifier)
-<<<<<<< Updated upstream
-pushToCC(signatures.long, tagsToPass = list(list(name="object",value="targetMapping.V1"),
+pushToCC(signatures.long, tagsToPass = list(list(name="object",value="targetMapping.V4"),
                                             list(name="project",value="evo")))
-# wf-f90b0697d4
-=======
-pushToCC(signatures.long, tagsToPass = list(list(name="object",value="targetMapping.V3"),
-                                            list(name="project",value="evo")))
-# wf-3e93b9331e
-# wf-dd6811aa54
+# wf-6c4b539629
 
 collectionMapping = lapply(names(list(x2=x2,ligands=ligands, positives=positives, itch=itch,mast=mast, nc=nc)), 
        function(collection){
   return(data.frame(signature = names(get(collection)), collection = str_to_title(collection)))
 }) %>% do.call(rbind,.)
 collectionMapping$collection[which(collectionMapping$signature == "mast_tryptase")] <- "Mast"
-collectionMapping$collection[which(collectionMapping$collection == "Nc")] <- "Negative Controls"
+collectionMapping$collection[which(collectionMapping$collection == "Nc")] <- "NegativeControls"
 collectionMapping = rbind(collectionMapping, data.frame(signature = c("smoothedRandom_top50",
                                                  "smoothedRandom_bottom50",
                                                  "random"),
                                                collection = rep("Negative Controls",3)))
 pushToCC(collectionMapping)
-# wf-e24aa55d1c
-# wf-77fec945d8
->>>>>>> Stashed changes
+# wf-6b6125369c

@@ -5,23 +5,17 @@ devtools::load_all("~/analysis-s05/R/utils.R")
 
 ### Prep
 ### ===========================
-gxdiff = readRDS(get_workflow_outputs("wf-edcade5c80"))
+gxdiff = readRDS(get_workflow_outputs("wf-fe0c7701a0"))
 gxdiff <- gxdiff %>%
   mutate(signedP = sign(estimate) * log10_pvalue) %>%
   mutate(estimate_logp = estimate * log10_pvalue) %>%
-  rowwise() %>%
-  mutate(agonist = case_when(
-    !agonist %in% c("All_4hr", "All_24hr", "SP_4hr", "SP_24hr") ~ 
-      paste0(agonist, "_", tail(strsplit(comparison, "_")[[1]], 1)),
-    TRUE ~ agonist
-  )) %>%
-  ungroup()
-
+  mutate(agonist = str_replace(agonist, "All","Pooled")) %>%
+  mutate(agonist = ifelse(str_detect(comparison, "_cov"), "Pooled+cov",agonist))
+gxdiff$time = sapply(gxdiff$comparison, function(x) tail(strsplit(x, "_")[[1]], 1))
+gxdiff$agonist = paste0(gxdiff$agonist, "_", gxdiff$time)
 
 ranking_methods <- list(
-  estimate = list(col = "estimate", suffix = ""),
-  pvalue = list(col = "signedP", suffix = "_p"),
-  estimate_logp = list(col = "estimate_logp", suffix = "_ep")
+  pvalue = list(col = "signedP", suffix = "_p")
 )
 
 agonists <- unique(gxdiff$agonist)
@@ -67,14 +61,16 @@ get_signature <- function(df, agonist_value, filter_col = NULL) {
 
 
 # Generate signatures
-generate_signatures <- function(activation_list, inhibition_list, agonists, ranking_methods) {
+generate_signatures <- function(activation_list, general_inhibition_list, activated_inhibition_list, agonists, ranking_methods) {
   genes_and_estimates <- list()
   genes_only <- list()
   
   for (method_name in names(ranking_methods)) {
-    suffix <- ranking_methods[[method_name]]$suffix
+    # suffix <- ranking_methods[[method_name]]$suffix
+    suffix = NULL
     act_df <- activation_list[[method_name]]
-    inh_df <- inhibition_list[[method_name]]
+    gen_inh_df <- general_inhibition_list[[method_name]]
+    act_inh_df <- activated_inhibition_list[[method_name]]
     
     for (agonist in agonists) {
       # Activation
@@ -83,11 +79,17 @@ generate_signatures <- function(activation_list, inhibition_list, agonists, rank
       genes_only[[paste0(agonist, "_activation_50", suffix)]] <- get_signature(act_df, agonist, "in_top50")$feature_id
       genes_only[[paste0(agonist, "_activation_100", suffix)]] <- get_signature(act_df, agonist)$feature_id
       
-      # Inhibition
-      genes_and_estimates[[paste0(agonist, "_inhibition_50", suffix)]] <- deframe(get_signature(inh_df, agonist, "in_bottom50"))
-      genes_and_estimates[[paste0(agonist, "_inhibition_100", suffix)]] <- deframe(get_signature(inh_df, agonist))
-      genes_only[[paste0(agonist, "_inhibition_50", suffix)]] <- get_signature(inh_df, agonist, "in_bottom50")$feature_id
-      genes_only[[paste0(agonist, "_inhibition_100", suffix)]] <- get_signature(inh_df, agonist)$feature_id
+      # General Inhibition
+      genes_and_estimates[[paste0(agonist, "_general_inhibition_50", suffix)]] <- deframe(get_signature(gen_inh_df, agonist, "in_bottom50"))
+      genes_and_estimates[[paste0(agonist, "_general_inhibition_100", suffix)]] <- deframe(get_signature(gen_inh_df, agonist))
+      genes_only[[paste0(agonist, "_general_inhibition_50", suffix)]] <- get_signature(gen_inh_df, agonist, "in_bottom50")$feature_id
+      genes_only[[paste0(agonist, "_general_inhibition_100", suffix)]] <- get_signature(gen_inh_df, agonist)$feature_id
+      
+      # Activated Inhibition
+      genes_and_estimates[[paste0(agonist, "_activated_inhibition_50", suffix)]] <- deframe(get_signature(act_inh_df, agonist, "in_bottom50"))
+      genes_and_estimates[[paste0(agonist, "_activated_inhibition_100", suffix)]] <- deframe(get_signature(act_inh_df, agonist))
+      genes_only[[paste0(agonist, "_activated_inhibition_50", suffix)]] <- get_signature(act_inh_df, agonist, "in_bottom50")$feature_id
+      genes_only[[paste0(agonist, "_activated_inhibition_100", suffix)]] <- get_signature(act_inh_df, agonist)$feature_id
     }
   }
   
@@ -99,27 +101,29 @@ generate_signatures <- function(activation_list, inhibition_list, agonists, rank
 ### ==============================================
 # Generate all activation/inhibition datasets
 # ---------------------------------------------
-<<<<<<< Updated upstream
-=======
-gxdiff = gxdiff[-which(gxdiff$agonist %in% c("All_4hr","All_24hr") & gxdiff$term == "inhibited_vs_uninhibited"),]
->>>>>>> Stashed changes
 activation_list <- map(ranking_methods, ~get_top_genes(gxdiff, "activated_vs_unactivated", "descending", .x$col, "top"))
-inhibition_list <- map(ranking_methods, ~get_top_genes(gxdiff, "inhibited_vs_uninhibited", "ascending", .x$col, "bottom"))
+general_inhibition_list <- map(ranking_methods, ~get_top_genes(gxdiff, "inhibited_vs_uninhibited", "ascending", .x$col, "bottom"))
+activated_inhibition_list <- map(ranking_methods, ~get_top_genes(gxdiff, "inhibited_vs_activated", "ascending", .x$col, "bottom"))
+
 activation <- dplyr::bind_rows(activation_list, .id = "rankingMetric") %>%
-  rename(in50 = in_top50)
-inhibition <- dplyr::bind_rows(inhibition_list, .id = "rankingMetric") %>%
-  rename(in50 = in_bottom50)
-allTopGenes <- rbind(activation, inhibition)
-                          
-X2_Signatures <- generate_signatures(activation_list, inhibition_list, agonists, ranking_methods)
+  dplyr::rename(in50 = in_top50)
+general_inhibition <- dplyr::bind_rows(general_inhibition_list, .id = "rankingMetric") %>%
+  dplyr::rename(in50 = in_bottom50)
+activated_inhibition <- dplyr::bind_rows(activated_inhibition_list, .id = "rankingMetric") %>%
+  dplyr::rename(in50 = in_bottom50)
+allTopGenes <- rbind(activation, general_inhibition, activated_inhibition)
+allTopGenes$comparison = str_remove(allTopGenes$comparison, "_cov")
+# wf-6e5b903b12
+
+X2_Signatures <- generate_signatures(activation_list, general_inhibition_list, activated_inhibition_list, agonists, ranking_methods)
 
 rename_signature_keys <- function(sig_list) {
   new_names <- names(sig_list) %>%
     gsub("_4hr", "_early", .) %>%
     gsub("_24hr", "_late", .) %>%
-    gsub("^All", "x2", .) %>%
-    gsub("^(x2|SP|CST14|Icatibant|PAMP12|Untreated|aIgE)_(early|late)?_(activation|inhibition)_(\\d+)(.*)$",
-         "\\1_\\3_\\2_\\4\\5", .)
+    gsub("^Pooled", "x2", .) %>%
+    gsub("^(x2|x2\\+cov|SP|CST14|Icatibant|PAMP12|Untreated|aIgE)_(early|late)?_(activation|general_inhibition|activated_inhibition)_(\\d+)(.*)$",
+  "\\1_\\3_\\2_\\4\\5", .)
   
   
   names(sig_list) <- new_names
@@ -136,27 +140,26 @@ X2_Signatures <- lapply(X2_Signatures, function(x) x[lengths(x) > 0])
 # Final signatures
 # -----------------------
 pushToCC(X2_Signatures, tagsToPass = list(list(name="object",value="X2Signatures")))
-# wf-712302a4c4
-<<<<<<< Updated upstream
-=======
-# wf-8509e99d66
->>>>>>> Stashed changes
+# wf-45c79e4b82
 
 signature_df = lapply(X2_Signatures$genes_and_estimates, function(x){
   enframe(x, name = "feature_id", value = "estimate")
 }) %>% bind_rows(.id = "signature") %>%
-  mutate(rankingMetric = case_when(str_detect(signature, "_p") ~ "pvalue",
-                                   str_detect(signature, "_ep") ~ "estimate_logp",
-                                   .default = "estimate")) %>%
-  mutate(wfid = "wf-8509e99d66")
+  mutate(rankingMetric = "pvalue") %>%
+  mutate(wfid = "wf-45c79e4b82")
+signature_df$agonist = sapply(signature_df$signature, function(x) {
+  pre = str_split(x,"_")[[1]][1]
+  post = ifelse(str_detect(x,"late"),"_24hr","_4hr")
+  return(paste0(pre,post))
+})
+allTopGenes$agonist = str_replace(allTopGenes$agonist, "Pooled","x2")
 
-signatures = merge(signature_df, allTopGenes, by.x = c("feature_id", "estimate","rankingMetric"), by.y = c("feature_id","estimate","rankingMetric"))
+signatures = merge(signature_df, allTopGenes, by.x = c("agonist","feature_id", "estimate","rankingMetric"), 
+                   by.y = c("agonist","feature_id","estimate","rankingMetric"), all = T)
+  signatures = signatures[-which(str_detect(signatures$signature,"general_inhibition") & str_detect(signatures$comparison, "inhibited_vs_activated")),]
+  signatures = signatures[-which(str_detect(signatures$signature,"activated_inhibition|activate_inhibition") & 
+                                   str_detect(signatures$comparison, "inhibited_vs_uninhibited")),]
+signatures$signature = str_replace(signatures$signature,"\\+","")
 uploadToBQ(signatures, bqdataset = "s05_atopic_dermatitis", tableName = "X2Signatures")
 pushToCC(signatures, tagsToPass = list(list(name="object",value="X2Signatures_all_top_genes")))
-<<<<<<< Updated upstream
-# wf-5b45a8e1bc
-
-=======
-# wf-a3f816eb59
-# wf-2527603eb4
->>>>>>> Stashed changes
+# wf-932d6ea274

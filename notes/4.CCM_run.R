@@ -5,15 +5,8 @@ library(tidyverse)
 # 1. Inputs
 # -----------------------------
 ccm = as_ccm_fit("wf-08a6a0a503")
-<<<<<<< Updated upstream
-signatures = readRDS(get_workflow_outputs("wf-b33649db09"))
-## make sure:
-## A. removing the extra dataset
-## all ligands is in entrez
-=======
-signatures = readRDS(get_workflow_outputs("wf-54d564beb9"))
-## removing the extra dataset isn't feasable within the contstraints of the project - need to re-run the disease model, causing compatibility issues
->>>>>>> Stashed changes
+signatures = readRDS(get_workflow_outputs("wf-b1950a97bd"))
+## removing the extra data set isn't feasible within the constraints of the project - need to re-run the disease model, causing compatibility issues
 
 
 # 2. Molecular and clinical scores
@@ -80,17 +73,9 @@ ccm_api_run_custom_gene_set_analysis(ccm, # when using AssetData it will pull re
                                      tags = list(list(tissue="skin"),
                                                  list(condition="AD"),
                                                  list(project="evo"),
-<<<<<<< Updated upstream
-                                                 list(name="analysis",value="X2_V1")),
+                                                 list(name="analysis",value="X2_V4")),
                                      data_access = "s05")
-# generate_ccm -- Fri Nov 14 15:07:26 2025: wf-eafe4014ef []
-=======
-                                                 list(name="analysis",value="X2_V3")),
-                                     data_access = "s05")
-# generate_ccm -- Mon Nov 17 13:12:37 2025: wf-c022438e0b []
-# generate_ccm -- Mon Nov 17 15:31:47 2025: wf-ab6dd9441b [] - fixed ep
-# generate_ccm -- Tue Nov 18 09:12:32 2025: wf-67e687bf9f []
-# generate_ccm -- Thu Nov 20 07:54:00 2025: wf-5d25fa144d []
+# generate_ccm -- Sun Nov 23 21:35:19 2025: wf-8151b8d62f []
 
 ########### This did not work due to using a legacy model
 ## 2. Modify CCM

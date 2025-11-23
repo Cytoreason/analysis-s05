@@ -18,15 +18,15 @@ refine_signatures = function(signatures) {
 }
 
 allSignatures = bq_table_download(x = bq_table(project = "cytoreason", dataset = "s05_atopic_dermatitis", table="X2Signatures"))
-allSignatures = allSignatures[!str_detect(allSignatures$signature,"Tryptase_50"),]
+allSignatures = allSignatures[!str_detect(allSignatures$signature,"mast_tryptase"),]
 allSignatures = split(allSignatures$feature_id, allSignatures$signature)                                  
 
 x2_inNet = refine_signatures(allSignatures)
 pushToCC(x2_inNet, tagsToPass = list(list(name = "object",value="X2_refined")))
-# wf-a3701a029e
-# wf-7d3612d412
+# wf-3495fcab6f
 
-# 5. Append signatures to BQ
+
+# Append signatures to BQ
 # ------------------------------------
 append_signatures = function(wfid, rankingMetric){
   X2_Signatures = readRDS(get_workflow_outputs(wfid))
@@ -35,6 +35,7 @@ append_signatures = function(wfid, rankingMetric){
     x = enframe(x, name = "agonist", value = "feature_id")
     agonist = str_split(signature,"_")[[1]][1]
     if(agonist == "x2") { agonist = "All" }
+    if(agonist == "x2+cov") { agonist = "All+cov" }
     x$agonist = agonist
     x$signature = signature
     return(x)
@@ -47,7 +48,7 @@ append_signatures = function(wfid, rankingMetric){
     mutate(wfid = wfid)
 }
 
-x2_refined = append_signatures("wf-7d3612d412", "refined")
+x2_refined = append_signatures("wf-3495fcab6f", "refined")
 
 uploadToBQ(x2_refined, bqdataset = "s05_atopic_dermatitis", tableName = "X2Signatures", disposition = "WRITE_APPEND")
 

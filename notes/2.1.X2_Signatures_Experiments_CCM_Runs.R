@@ -1,10 +1,9 @@
 # In this part we genereate the signatures for X2 using RNAseq data from the client
 # that was processed and QC'ed in the validator.
-
 library(cytoreason.ccm.pipeline)
-library(cytoreason.cc.client)
 library(tidyverse)
 library(reshape2)
+library(patchwork)
 devtools::load_all("~/analysis-s05/R/utils.R")
 
 # 1. 4hr experiment
@@ -37,19 +36,23 @@ designMat = cbind(metadata %>%
                   metadata %>%
                     mutate(activated_vs_unactivated = ifelse(agonist == "Untreated", "Unactivated", "Activated")) %>%
                     mutate(activated_vs_unactivated = ifelse(!is.na(inhibitor), NA, activated_vs_unactivated)) %>%
-                    dplyr::select(activated_vs_unactivated)
+                    dplyr::select(activated_vs_unactivated),
+                  metadata %>%
+                    mutate(inhibited_vs_activated = ifelse(is.na(inhibitor), "Activated","EVO576")) %>%
+                    mutate(inhibited_vs_activated = ifelse(agonist == "Untreated", NA, inhibited_vs_activated)) %>%
+                    dplyr::select(inhibited_vs_activated)
                   )
 
 metadata = merge(metadata, designMat, by = 1)
 metadata = merge(metadata, phenoData(X2_4hr)@data, by = 1)
 rownames(metadata) = metadata$sample
-X2_4hr = ExpressionSet(assayData = exprs(X2_4hr),
+X2_4hr = ExpressionSet(assayData = assayData(X2_4hr),
                        phenoData = AnnotatedDataFrame(metadata),
                        featureData = featureData(X2_4hr),
                        annotation = "org.Hs.eg.db")
 pushToCC(X2_4hr, tagsToPass = list(list(name="object",value="eset_X2_4hr")))
-# wf-09b09047b2
-
+# wf-74008e33fd - counts
+# wf-faf98d72b3 - exprs
 
 
 # 1. 24hr experiment
@@ -86,28 +89,37 @@ designMat = cbind(metadata %>%
                   metadata %>%
                     mutate(activated_vs_unactivated = ifelse(stimulation == "Untreated", "Unactivated", "Activated")) %>%
                     mutate(activated_vs_unactivated = ifelse(!is.na(inhibitor), NA, activated_vs_unactivated)) %>%
-                    dplyr::select(activated_vs_unactivated)
+                    dplyr::select(activated_vs_unactivated),
+                  metadata %>%
+                    mutate(inhibited_vs_activated = ifelse(is.na(inhibitor), "Activated","EVO576")) %>%
+                    mutate(inhibited_vs_activated = ifelse(stimulation == "Untreated", NA, inhibited_vs_activated)) %>%
+                    dplyr::select(inhibited_vs_activated)
                   )
 
 metadata = merge(metadata, designMat, by = 1)
 metadata = merge(metadata,phenoData(X2_24hr)@data, by.y = "fileID", by.x = "sample", all = T)
 rownames(metadata) = metadata$sample
 
-X2_24hr = ExpressionSet(assayData = exprs(X2_24hr), # notice we take only the exprs, otherwise it calculates on the counts
+X2_24hr = ExpressionSet(assayData = assayData(X2_24hr), 
                        phenoData = AnnotatedDataFrame(metadata),
                        featureData = featureData(X2_24hr),
                        annotation = "org.Hs.eg.db")
 pushToCC(X2_24hr, tagsToPass = list(list(name="object",value="eset_X2_24hr")))
-# wf-84a90d45bb
+# wf-b1d08dc2f1 - counts
+# wf-fee413401f - exprs
 
 
 
 # Constructing a config file & running ccm
 # ---------------------------------------------
-meta_4hr = readRDS(get_workflow_outputs("wf-09b09047b2"))@phenoData@data
-meta_24hr = readRDS(get_workflow_outputs("wf-84a90d45bb"))@phenoData@data
+meta_4hr = readRDS(get_workflow_outputs("wf-74008e33fd"))@phenoData@data
+meta_24hr = readRDS(get_workflow_outputs("wf-b1d08dc2f1"))@phenoData@data
 write.csv(meta_4hr, "~/analysis-s05/data/metadata_final_4h.csv")
 write.csv(meta_24hr, "~/analysis-s05/data/metadata_final_24h.csv")
+
+comparisonName = function(colname){
+  ifelse(str_detect(colname,"_activated|_inhibited") & !str_detect(colname, "inhibited_vs_activated"), str_split_fixed(colname,"_",n = 2)[[2]], colname)
+}
 
 configLine = data.frame(ccm_exclude = NA,
                         ccm_meta = 0,
@@ -124,7 +136,7 @@ configLine = data.frame(ccm_exclude = NA,
                         comparison_levels = NA,
                         model_group = NA,
                         model_pairing = "donor",
-                        model_covariates = NA,
+                        model_covariates = NA, # we are not using covariates to the pooled analysis because we want to see the pooled effect and not account for differences between agonists
                         model_timepoint = NA,
                         model_exclude_samples = NA,
                         condition = "unknown",
@@ -132,38 +144,52 @@ configLine = data.frame(ccm_exclude = NA,
                         sample_tissue = NA,
                         comments = "mast cells cell line")
 
-config = do.call(rbind, replicate(19, configLine, simplify = F))
+idx_meta_4hr = 7:(ncol(meta_4hr)-2) # starts with column 7
+idx_meta_24hr = 8:(ncol(meta_24hr)-2) # starts in column 8
+idx_4hr  = seq_len(ncol(meta_4hr) + 3 - 8) # add 3 for covariate analysis
+idx_24hr = seq(from = length(idx_4hr) + 1,
+              to = length(idx_4hr) + (ncol(meta_24hr) + 3 - 9))  # add 3 for covariate analysis
+names(idx_4hr) = c(colnames(meta_4hr[idx_meta_4hr]), paste0(colnames(meta_4hr[tail(idx_meta_4hr,3)]),"_cov"))
+names(idx_24hr) = c(colnames(meta_24hr[idx_meta_24hr]), paste0(colnames(meta_24hr[tail(idx_meta_24hr,3)]),"_cov"))
 
-config$experiment_id[1:12] = "X2_4hr"
-config$experiment_id[13:19] = "X2_24hr"
+config = do.call(rbind, replicate(tail(idx_24hr,1), configLine, simplify = F))
 
-config$platform_id[1:12] = "GPL24676"
-config$platform_id[13:19] = "GPL34281"
+config$experiment_id[idx_4hr] = "X2_4hr"
+config$experiment_id[idx_24hr] = "X2_24hr"
 
-config$asset_id[1:12] = "ccw://wf-09b09047b2:0:output.rds"
-config$asset_id[13:19] = "ccw://wf-84a90d45bb:0:output.rds"
+config$platform_id[idx_4hr] = "GPL24676"
+config$platform_id[idx_24hr] = "GPL34281"
 
-config$comparison[1:9] = sapply(colnames(meta_4hr)[7:15], function(x) str_split_fixed(x,"_",n = 2)[[2]])
-config$comparison[10:12] = c(colnames(meta_4hr)[16:17],paste0(colnames(meta_4hr)[17],"_cov"))
-config$comparison[13:16] = sapply(colnames(meta_24hr)[8:11], function(x) str_split_fixed(x,"_",n = 2)[[2]])
-config$comparison[17:19] = c(colnames(meta_24hr)[12:13],paste0(colnames(meta_24hr)[13],"_cov"))
-config$comparison_id[1:12] = c(paste0(colnames(meta_4hr)[7:17],"_4hr"),paste0(colnames(meta_4hr)[17],"_cov_4hr"))
-config$comparison_id[13:19] = c(paste0(colnames(meta_24hr)[8:13],"_24hr"),paste0(colnames(meta_24hr)[13],"_cov_24hr"))
+config$asset_id[idx_4hr] = "ccw://wf-74008e33fd:0:output.rds"
+config$asset_id[idx_24hr] = "ccw://wf-b1d08dc2f1:0:output.rds"
 
-config$model_covariates[12] = "agonist"
-config$model_covariates[19] = "stimulation"
+config$comparison[idx_4hr] = sapply(names(idx_4hr), comparisonName)
+config$comparison[idx_24hr] = sapply(names(idx_24hr), comparisonName)
 
-config$model_group[c(1:5,13:14)] = sapply(c(colnames(meta_4hr)[7:11], colnames(meta_24hr)[8:9]),
-                                          function(x) paste0(x,":{uninhibited:Uninhibited, inhibited:EVO576}"))
-config$model_group[c(6:9,15:16)] = sapply(c(colnames(meta_4hr)[12:15], colnames(meta_24hr)[10:11]),
-                                           function(x) paste0(x,":{unactivated:Unactivated",", ", "activated:",str_split(x,"_")[[1]][1],"}"))
-config$model_group[c(10,17)] = "inhibited_vs_uninhibited:{uninhibited:Uninhibited, inhibited:Inhibited}"
-config$model_group[c(11,12,18,19)] = "activated_vs_unactivated:{unactivated:Unactivated, activated:Activated}"
+config$comparison_id[idx_4hr] = names(idx_4hr)
+config$comparison_id[idx_24hr] = names(idx_24hr)
+
+config$model_covariates[str_detect(config$comparison_id,"cov_4hr")] = "agonist"
+config$model_covariates[str_detect(config$comparison_id,"cov_24hr")] = "stimulation"
+
+config$model_group[str_detect(config$comparison_id, "_inhibited_vs_uninhibited")] =
+  sapply(config$comparison_id[str_detect(config$comparison_id, "_inhibited_vs_uninhibited")],
+         function(x) paste0(x,":{uninhibited:Uninhibited, inhibited:EVO576}"))
+config$model_group[str_detect(config$comparison_id, "_activated_vs_unactivated")] =
+  sapply(config$comparison_id[str_detect(config$comparison_id, "_activated_vs_unactivated")],
+         function(x) paste0(x,":{unactivated:Unactivated",", ", "activated:",str_split(x,"_")[[1]][1],"}"))
+config$model_group[str_detect(config$comparison_id, "^inhibited_vs_uninhibited")] = "inhibited_vs_uninhibited:{uninhibited:Uninhibited, inhibited:Inhibited}"
+config$model_group[str_detect(config$comparison_id, "^activated_vs_unactivated")] = "activated_vs_unactivated:{unactivated:Unactivated, activated:Activated}"
+config$model_group[str_detect(config$comparison_id, "inhibited_vs_activated")] = "inhibited_vs_activated:{activated:Activated, inhibited:EVO576}"
+
+config$comparison_id[idx_4hr] = paste0(names(idx_4hr),"_4hr") # add the hr identifier
+config$comparison_id[idx_24hr] = paste0(names(idx_24hr),"_24hr")
 
 write.csv(config, "~/analysis-s05/data/X2_config.csv", row.names = F)
 pushToCC(config, tagsToPass = list(list(name="object",value="config"),
                                    list(name="project",value="X2_Signatures")))
-# wf-a399720b79
+# wf-2fa2e07dd0 - counts
+# wf-f591b7e333 - exprs
 
 
 # local test first
@@ -175,35 +201,34 @@ ccm_api_generate_ccm(config = config,
                      model = .skip('gene_cell_correlations','cell_cell_correlations','feature_cell_correlations','pheno_feature_correlations',
                                    'cell_specific_differences','gene_set_activity_differences','survival_analysis_tme'),
                      image = "master@0.72.0")
-# generate_ccm -- Thu Oct 30 14:28:43 2025: wf-2826ed2d24 [] - counts
-# generate_ccm -- Thu Oct 30 14:05:43 2025: wf-2a79b1167b [] - exprs
+# generate_ccm -- Sun Nov 23 12:28:26 2025: wf-b3318c6d1e [] - exprs
+# generate_ccm -- Sun Nov 23 15:09:46 2025: wf-696ca67797 [] - counts
+
 
 
 ## Processing the results
 ## ------------------------------------------
-ccm = as_ccm_fit("wf-2826ed2d24")
+ccm = as_ccm_fit("wf-696ca67797")
 
 allOptions = lapply(names(ccm$datasets), function(dataset){
   data.frame(experiment = dataset,
              comparison = names(ccm$datasets[[dataset]]$model))
 }) %>% do.call(rbind,.)
-allOptions = allOptions[-which(str_detect(allOptions$comparison,"_cov")),]
 
 gx = list()
 gsa = list()
 apply(allOptions, 1, function(x){
   cat("\n",x,"\n")
   gx_tmp = statistic_table(analysisResultElement(ccm$datasets[[x[1]]]$model[[x[2]]],"gx_diff"))
-  gx_tmp = gx_tmp[which(gx_tmp$term %in% c("unactivated","activated_vs_unactivated","activated_vs_unactivated_cov","inhibited_vs_uninhibited")),]
+  gx_tmp = gx_tmp[str_detect(gx_tmp$term, c("activated_vs_unactivated|inhibited_vs_uninhibited|inhibited_vs_activated")),]
   agonist = strsplit(x[2],"_")[[1]][1]
   if(agonist %in% c("inhibited","activated")) { agonist = "All" }
-  if(agonist %in% c("SP","All")) { agonist = paste0(agonist,"_", strsplit(x[1],"_")[[1]][2]) }
 
   gx_tmp = data.frame(dataset_id = x[1], comparison = x[2], agonist = agonist, gx_tmp)
   gx <<- append(gx, list(gx_tmp))
 
   gsa_tmp = statistic_table(analysisResultElement(ccm$datasets[[x[1]]]$model[[x[2]]],"gx_gsa"))
-  gsa_tmp = gsa_tmp[which(gsa_tmp$term %in% c("unactivated","activated_vs_unactivated","activated_vs_unactivated_cov","inhibited_vs_uninhibited")),]
+  gsa_tmp = gsa_tmp[str_detect(gsa_tmp$term, c("activated_vs_unactivated|inhibited_vs_uninhibited|inhibited_vs_activated")),]
   gsa_tmp = data.frame(dataset_id = x[1], comparison = x[2], agonist = agonist, gsa_tmp)
   gsa <<- append(gsa, list(gsa_tmp))
   NULL
@@ -212,98 +237,114 @@ apply(allOptions, 1, function(x){
 gx_binded = do.call(rbind, gx)
 gsa_binded = do.call(rbind, gsa)
 uploadToBQ(gx_binded, bqdataset = "s05_atopic_dermatitis", tableName = "X2Signatures_gxdiff")
-# wf-edcade5c80
-# wf-a121700ef7
+pushToCC(gx_binded, tagsToPass = list(list(name="analysis",value="gx_diff"),list(name="project",value="X2")))
+# wf-12254175c7 - exprs
+# wf-fe0c7701a0 - counts
+
 uploadToBQ(gsa_binded, bqdataset = "s05_atopic_dermatitis", tableName = "X2Signatures_gxgsea")
-# wf-9429788f8a
-# wf-765f884da8
-
-gx_binded$term = droplevels(gx_binded$term)
-
-# Graph to see if there's a signal
-ggplot(gx_binded, aes(x = estimate, y = log10_fdr)) +
-  geom_point(aes(color = ifelse(log10_fdr >= -log10(0.05),"black","grey80"))) +
-  geom_hline(yintercept = -log10(0.05), linetype = "dashed") +
-  scale_color_identity() +
-  facet_grid(cols = vars(agonist), rows = vars(term)) +
-  theme_light() +
-  theme(axis.title.x.top = element_text("Agonist"), axis.title.y.right = element_text("Comparison"))
+pushToCC(gsa_binded, tagsToPass = list(list(name="analysis",value="gx_gsa"),list(name="project",value="X2")))
+# wf-9d65578ccc - exprs
+# wf-e6a03c52ab - counts
 
 
 # Clean graph for Evommune
 # ------------------------------
-library(patchwork)
-gx = readRDS(get_workflow_outputs("wf-edcade5c80"))
-gx = gx[-which(gx$term == "unactivated"),]
+gx = readRDS(get_workflow_outputs("wf-fe0c7701a0"))
+gx$term = droplevels(gx$term)
 gx$agonist[str_detect(gx$agonist, "All")] <- "Pooled"
-gx$agonist[str_detect(gx$agonist, "SP")] <- "SP"
+gx$term = as.character(gx$term)
 
 x2_4h = gx[which(gx$dataset_id == "X2_4hr__GPL24676"),]
 x2_24h = gx[which(gx$dataset_id == "X2_24hr__GPL34281"),]
 
-x2_4h$agonist = factor(x2_4h$agonist, ordered = T, levels = c("Pooled","CST14","Icatibant","PAMP12","SP","Untreated"))
-x2_24h$agonist = factor(x2_24h$agonist, ordered = T, levels = c("Pooled","aIgE","SP","Untreated"))
+x2_4h$agonist[str_detect(x2_4h$comparison, "cov")] <- "Pooled+cov"
+x2_24h$agonist[str_detect(x2_24h$comparison, "cov")] <- "Pooled+cov"
 
-x2_4h = rbind(x2_4h, x2_4h[1,] %>%  mutate(agonist = "Untreated", estimate = NA))
-x2_24h = rbind(x2_24h, rbind(x2_24h[1,] %>%  mutate(agonist = "Untreated", estimate = NA),
-                            x2_24h[59293,] %>%  mutate(agonist = "Untreated", estimate = NA)))
+x2_4h$agonist = factor(x2_4h$agonist, ordered = T, levels = c("Pooled","Pooled+cov","CST14","Icatibant","PAMP12","SP","Untreated"))
+x2_24h$agonist = factor(x2_24h$agonist, ordered = T, levels = c("Pooled","Pooled+cov","aIgE","SP","Untreated"))
 
-FDRlabel <- x2_4h %>%
-  group_by(term) %>%
-  dplyr::filter(agonist == "Untreated") %>%  # Select the leftmost column for each row
-  slice(1) # Just one row per facet
+# for visualization purposes
+x2_4h = rbind(x2_4h,
+              x2_4h[which(x2_4h$term == "activated_vs_unactivated")[1],] %>%  mutate(agonist = "Untreated", estimate = NA),
+              x2_4h[which(x2_4h$term == "inhibited_vs_activated")[1],] %>%  mutate(agonist = "Untreated", estimate = NA))
+x2_24h = rbind(x2_24h,
+               x2_24h[which(x2_24h$term == "activated_vs_unactivated")[1],] %>%  mutate(agonist = "Untreated", estimate = NA),
+               x2_24h[which(x2_24h$term == "inhibited_vs_uninhibited")[1],] %>%  mutate(agonist = "Untreated", estimate = NA),
+               x2_24h[which(x2_24h$term == "inhibited_vs_activated")[1],] %>%  mutate(agonist = "Untreated", estimate = NA))
 
-nSig = x2_4h %>%
-  dplyr::filter(pvalue <= 0.05) %>%  # Select the leftmost column for each row
-  group_by(comparison, term) %>%
-  mutate(nSigGenes = n()) %>%
-  slice(1) # Just one row per facet
+x2_4h$term = sapply(x2_4h$term, function(x) paste0(paste0(str_split(x,"_")[[1]][1:2],collapse = " "), "\n",str_split(x,"_")[[1]][3]))
+x2_24h$term = sapply(x2_24h$term, function(x) paste0(paste0(str_split(x,"_")[[1]][1:2],collapse = " "), "\n",str_split(x,"_")[[1]][3]))
 
-four = ggplot(x2_4h, aes(x = estimate, y = log10_pvalue)) +
-  geom_point(aes(color = ifelse(log10_pvalue >= -log10(0.05),"black","grey80"))) +
-  geom_hline(yintercept = -log10(0.05), linetype = "dashed") +
-  geom_text(data = FDRlabel, x = 3, y = 1.1, label = "pvalue = 0.05", check_overlap = T, size = 3, hjust= "left") +
-  geom_text(data = nSig, x = 0, y=6.5, aes(label=paste0("n=",nSigGenes)), check_overlap = T, size = 3, hjust = "left")+
-  scale_color_identity() +
-  scale_x_continuous(name = "estimate (log2 Fold Change)", sec.axis = dup_axis(name = "Agonist"))+
-  scale_y_continuous(name = "-log10(p-value)", sec.axis = dup_axis(name = "Comparison"))+
-  facet_grid(cols = vars(agonist), rows = vars(term)) +
-  theme_bw() +
-  theme(axis.ticks.x.top = element_blank(), axis.line.x.top = element_blank(), axis.text.x.top = element_blank(),
-        axis.ticks.y.right = element_blank(), axis.line.y.right = element_blank(), axis.text.y.right = element_blank()) +
-  labs(title = expression(underline("4 hour experiment")))
-# four  
+for(chosenMetric in c("fdr","pvalue")) {
+  FDRlabel <- x2_4h %>%
+    group_by(term) %>%
+    dplyr::filter(agonist == "Untreated") %>%  # Select the leftmost column for each row
+    dplyr::slice(1) # Just one row per facet
+  
+  nSig = x2_4h %>%
+    mutate(metric = get(chosenMetric)) %>%
+    mutate(log10_metric = -log10(metric)) %>%
+    dplyr::filter(metric <= 0.05) %>%  # Select the leftmost column for each row
+    group_by(comparison, term) %>%
+    mutate(nSigGenes = n()) %>%
+    dplyr::slice(1) # Just one row per facet
+  
+  dat = x2_4h %>%
+    mutate(metric = get(chosenMetric)) %>%
+    mutate(log10_metric = -log10(metric))
+  
+  four = ggplot(dat, aes(x = estimate, y = log10_metric)) +
+    geom_point(aes(color = ifelse(log10_metric >= -log10(0.05),"black","grey80"))) +
+    geom_hline(yintercept = -log10(0.05), linetype = "dashed") +
+    geom_text(data = FDRlabel, x = 4.5, y = 1.1, label = "pvalue = 0.05", check_overlap = T, size = 3, hjust= "left") +
+    geom_text(data = nSig, x = 0, aes(y = max(log10_metric)-0.5, label=paste0("n=",nSigGenes)), check_overlap = T, size = 3, hjust = "left")+
+    scale_color_identity() +
+    scale_x_continuous(name = "estimate (log2 Fold Change)", sec.axis = dup_axis(name = "Agonist"))+
+    scale_y_continuous(name = paste0("-log10(",chosenMetric,")"), sec.axis = dup_axis(name = "Comparison"))+
+    facet_grid(cols = vars(agonist), rows = vars(term)) +
+    theme_bw() +
+    theme(axis.ticks.x.top = element_blank(), axis.line.x.top = element_blank(), axis.text.x.top = element_blank(),
+          axis.ticks.y.right = element_blank(), axis.line.y.right = element_blank(), axis.text.y.right = element_blank()) +
+    labs(title = expression(underline("4 hour experiment")))
+  # four  
+  
+  FDRlabel <- x2_24h %>%
+    group_by(term) %>%
+    dplyr::filter(agonist == "Untreated") %>%  # Select the leftmost column for each row
+    dplyr::slice(1) # Just one row per facet
+  
+  nSig = x2_24h %>%
+    mutate(metric = get(chosenMetric)) %>%
+    mutate(log10_metric = -log10(metric)) %>%
+    dplyr::filter(metric <= 0.05) %>%  # Select the leftmost column for each row
+    group_by(comparison, term) %>%
+    mutate(nSigGenes = n()) %>%
+    dplyr::slice(1) # Just one row per facet
+  
+  dat = x2_24h %>%
+    mutate(metric = get(chosenMetric)) %>%
+    mutate(log10_metric = -log10(metric))
 
-FDRlabel <- x2_24h %>%
-  group_by(term) %>%
-  dplyr::filter(agonist == "Untreated") %>%  # Select the leftmost column for each row
-  slice(1) # Just one row per facet
-
-nSig = x2_24h %>%
-  dplyr::filter(pvalue <= 0.05) %>%  # Select the leftmost column for each row
-  group_by(comparison, term) %>%
-  mutate(nSigGenes = n()) %>%
-  slice(1) # Just one row per facet
-
-twentyfour = ggplot(x2_24h, aes(x = estimate, y = log10_pvalue)) +
-  geom_point(aes(color = ifelse(log10_pvalue >= -log10(0.05),"black","grey80"))) +
-  geom_hline(yintercept = -log10(0.05), linetype = "dashed") +
-  geom_text(data = FDRlabel, x = 7, y = 1.1, label = "pvalue = 0.05", check_overlap = T, size = 3, hjust= "right") +
-  geom_text(data = nSig, x = 5, y=6, aes(label=paste0("n=",nSigGenes)), check_overlap = T, size = 3, hjust = "left")+
-  scale_color_identity() +
-  scale_x_continuous(name = "estimate (log2 Fold Change)", sec.axis = dup_axis(name = "Agonist"))+
-  scale_y_continuous(name = "-log10(p-value)", sec.axis = dup_axis(name = "Comparison"))+
-  facet_grid(cols = vars(agonist), rows = vars(term)) +
-  theme_bw() +
-  theme(axis.ticks.x.top = element_blank(), axis.line.x.top = element_blank(), axis.text.x.top = element_blank(),
-        axis.ticks.y.right = element_blank(), axis.line.y.right = element_blank(), axis.text.y.right = element_blank()) +
-  labs(title = expression(underline("24 hour experiment")))
-# twentyfour
-
-four/twentyfour
-ggsave("~/analysis-s05/figures/X2_Signature/Experiments_Signal_pvalue.png", width = 800, height = 900, units = "px", dpi = 96)
-
-
+  twentyfour = ggplot(dat, aes(x = estimate, y = log10_metric)) +
+    geom_point(aes(color = ifelse(log10_metric >= -log10(0.05),"black","grey80"))) +
+    geom_hline(yintercept = -log10(0.05), linetype = "dashed") +
+    geom_text(data = FDRlabel, x = 7, y = 1.1, label = "pvalue = 0.05", check_overlap = T, size = 3, hjust= "right") +
+    geom_text(data = nSig, x = 4.5, aes(y = max(log10_metric)-0.5, label=paste0("n=",nSigGenes)), check_overlap = T, size = 3, hjust = "left")+
+    scale_color_identity() +
+    scale_x_continuous(name = "estimate (log2 Fold Change)", sec.axis = dup_axis(name = "Agonist"))+
+    scale_y_continuous(name = paste0("-log10(",chosenMetric,")"), sec.axis = dup_axis(name = "Comparison"))+
+    facet_grid(cols = vars(agonist), rows = vars(term)) +
+    theme_bw() +
+    theme(axis.ticks.x.top = element_blank(), axis.line.x.top = element_blank(), axis.text.x.top = element_blank(),
+          axis.ticks.y.right = element_blank(), axis.line.y.right = element_blank(), axis.text.y.right = element_blank()) +
+    labs(title = expression(underline("24 hour experiment")))
+  # twentyfour
+  
+  graph = four/twentyfour
+  ggsave(plot = graph, filename = paste0("~/analysis-s05/figures/X2_Signature/Experiments_Signal_",chosenMetric,".png"), 
+         width = 800, height = 900, units = "px", dpi = 96)
+  
+}
 
 # clean envir
-rm(twentyfour, four, FDRlabel, nSig, x2_24h, x2_4h, gx)
+rm(dat, twentyfour, four, FDRlabel, nSig, x2_24h, x2_4h, gx)
