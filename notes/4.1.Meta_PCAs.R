@@ -154,3 +154,49 @@ ggplot(toploadings, aes(x = loading, y = Pathway)) +
   labs(x = "Pathway Loading on Meta-PCA", y = "Pathway") +
   theme(strip.text = element_text(size = 16), axis.text = element_text(size = 14), axis.title = element_text(size = 14))
 ggsave("~/analysis-s05/figures/AD Model/adjPathwayLoadings.top50.png", scale = 2, width = 18, height = 8, bg = "white")
+
+
+# key pathways in bulk vs adjusted
+# ------------------------------------
+keyPathways_bulk = readRDS(get_workflow_outputs("wf-ee9a8f05a7")) %>% .[["keyPathways"]]
+keyPathways_adj = readRDS(get_workflow_outputs("wf-98fc25d966")) %>% .[["keyPathways"]]
+keyPathways = rbind(cbind(submodel = "bulk", keyPathways_bulk),
+                    cbind(submodel = "adjusted", keyPathways_adj))
+
+keyPathways.wide = reshape2::dcast(keyPathways, ID ~ submodel)
+keyPathways.wide = keyPathways.wide %>%
+  mutate(importance = case_when(!is.na(bulk) & !is.na(adjusted) ~ "stayed important",
+                          !is.na(bulk) & is.na(adjusted) ~ "lost importance",
+                          is.na(bulk) & !is.na(adjusted) ~ "gained importance"))
+table(keyPathways.wide$importance)
+# gained importance   lost importance  stayed important 
+#                28               446               252 
+
+ontology = openxlsx::read.xlsx("~/data/Pathways_heirarchy_all collections_final.xlsx")
+ontology$Full_pathway_name = str_replace(ontology$Full_pathway_name, "__", ":")
+
+# some changes to make them match
+keyPathways.wide$ID[str_detect(keyPathways.wide$ID,"h:")] <- str_to_lower(keyPathways.wide$ID[str_detect(keyPathways.wide$ID,"h:")])
+keyPathways.wide$ID[str_detect(keyPathways.wide$ID,"reactome:")] <- str_to_lower(keyPathways.wide$ID[str_detect(keyPathways.wide$ID,"reactome:")])
+keyPathways.wide$ID <- str_replace(keyPathways.wide$ID,"kegg","KEGG")
+keyPathways.wide = read.csv("~/data/keyPathways_wide.csv")
+
+keyPathways.wide$level0 = ontology$level0[match(keyPathways.wide$ID, ontology$Full_pathway_name)]
+keyPathways.wide$level1 = ontology$level_1[match(keyPathways.wide$ID, ontology$Full_pathway_name)]
+keyPathways_sum = keyPathways.wide %>%
+  group_by(importance, level0) %>%
+  summarise(nPathways = n()) %>%
+  ungroup() %>%
+  dplyr::filter(!is.na(level0))
+
+keyPathways_sum$PathwayImportance = cytoreason.gx::reorder_within(keyPathways_sum$level0, keyPathways_sum$nPathways, within = keyPathways_sum$importance)
+
+ggplot(keyPathways_sum, aes(x = importance, y = nPathways, fill = level0, group = PathwayImportance)) +
+  geom_col(position = position_dodge2(0.75)) +
+  cytoreason.gx::scale_x_reordered()+
+  coord_flip()+
+  scale_color_brewer(palette = "Set3") +
+  theme_minimal() +
+  labs(x = NULL, y = "Number of pathways", fill = "Pathway\nCategory")+
+  ggtitle("Change in the key disease pathways between bulk and adjusted")
+ggsave("~/analysis-s05/figures/AD Model/keyPathways_betweenBulkAndAdjusted.png", scale = 1, width = 8, height = 5, bg = "white")

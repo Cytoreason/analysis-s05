@@ -275,6 +275,9 @@ x2_24h = rbind(x2_24h,
 x2_4h$term = sapply(x2_4h$term, function(x) paste0(paste0(str_split(x,"_")[[1]][1:2],collapse = " "), "\n",str_split(x,"_")[[1]][3]))
 x2_24h$term = sapply(x2_24h$term, function(x) paste0(paste0(str_split(x,"_")[[1]][1:2],collapse = " "), "\n",str_split(x,"_")[[1]][3]))
 
+x2_4h = x2_4h[-which(str_detect(x2_4h$agonist,"cov")),]
+x2_24h = x2_24h[-which(str_detect(x2_24h$agonist,"cov")),]
+
 for(chosenMetric in c("fdr","pvalue")) {
   FDRlabel <- x2_4h %>%
     group_by(term) %>%
@@ -296,7 +299,7 @@ for(chosenMetric in c("fdr","pvalue")) {
   four = ggplot(dat, aes(x = estimate, y = log10_metric)) +
     geom_point(aes(color = ifelse(log10_metric >= -log10(0.05),"black","grey80"))) +
     geom_hline(yintercept = -log10(0.05), linetype = "dashed") +
-    geom_text(data = FDRlabel, x = 4.5, y = 1.1, label = "pvalue = 0.05", check_overlap = T, size = 3, hjust= "left") +
+    geom_text(data = FDRlabel, x = 4.5, y = 1.1, label = "pvalue = 0.05", check_overlap = T, size = 3, hjust= "right") +
     geom_text(data = nSig, x = 0, aes(y = max(log10_metric)-0.5, label=paste0("n=",nSigGenes)), check_overlap = T, size = 3, hjust = "left")+
     scale_color_identity() +
     scale_x_continuous(name = "estimate (log2 Fold Change)", sec.axis = dup_axis(name = "Agonist"))+
@@ -342,7 +345,7 @@ for(chosenMetric in c("fdr","pvalue")) {
   
   graph = four/twentyfour
   ggsave(plot = graph, filename = paste0("~/analysis-s05/figures/X2_Signature/Experiments_Signal_",chosenMetric,".png"), 
-         width = 800, height = 900, units = "px", dpi = 96)
+         width = 800, height = 900, units = "px", scale=3)
   
 }
 

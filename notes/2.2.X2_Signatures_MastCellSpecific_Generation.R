@@ -137,8 +137,8 @@ X2_Signatures$genes_only <- rename_signature_keys(X2_Signatures$genes_only)
 X2_Signatures <- lapply(X2_Signatures, function(x) x[lengths(x) > 0])
 
 
-# Final signatures
-# -----------------------
+## Final signatures
+## ===================
 pushToCC(X2_Signatures, tagsToPass = list(list(name="object",value="X2Signatures")))
 # wf-45c79e4b82
 
@@ -163,3 +163,45 @@ signatures$signature = str_replace(signatures$signature,"\\+","")
 uploadToBQ(signatures, bqdataset = "s05_atopic_dermatitis", tableName = "X2Signatures")
 pushToCC(signatures, tagsToPass = list(list(name="object",value="X2Signatures_all_top_genes")))
 # wf-932d6ea274
+
+
+## How much of the pooled signature is from each ligand?
+## ==============================================================
+library(fmsb)
+signatures = readRDS(get_workflow_outputs("wf-45c79e4b82"))
+  signatures = signatures$genes_only
+  signatures = signatures[!str_detect(names(signatures),"cov")]  
+
+  
+  
+  
+compute_intersections <- function(x) {
+  x2   <- x[grepl("^x2", names(x))]
+  non  <- x[!grepl("^x2", names(x))]
+  
+  setNames(lapply(names(x2), function(nm) {
+    # Filter non-x2 based on x2 name
+    if (grepl("50", nm)) {
+      non_filtered <- non[grepl("50", names(non))]
+      filler <- 50
+    } else {
+      non_filtered <- non[grepl("100", names(non))]
+      filler <- 100
+    }
+    
+    # Compute intersections
+    cnt <- vapply(non_filtered, function(b) length(intersect(x2[[nm]], b)), integer(1))
+    
+    # Build data frame
+    df <- as.data.frame(rbind(rep(filler, length(cnt)), rep(0, length(cnt)),cnt), check.names = FALSE)
+    colnames(df) <- names(cnt)
+    colnames(df) = str_wrap(str_replace_all(str_remove(colnames(df),"_50|_100"),"_"," "), width = 10)
+    df
+  }), names(x2))
+}
+  
+
+# Run the function
+output <- compute_intersections(signatures)
+
+radarchart(output$x2_activated_inhibition_early_50, seg = 5, title = "Number of genes in the X2 activated inhibition early signature")

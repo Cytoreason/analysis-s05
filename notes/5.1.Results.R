@@ -175,8 +175,9 @@ Results = list(DZEnrichment = Results[[1]],
                Target_MS = Results[[3]][which(Results[[3]]$DataType == "Target_MS"),],
                Target_CS = Results[[3]][which(Results[[3]]$DataType == "Target_CS"),],
                Target_Cell_PCA = Results[[3]][which(Results[[3]]$DataType == "Target_Cell_PCA"),],
-               Target_Pathway_PCA = Results[[3]][which(Results[[3]]$DataType == "Target_Pathway_PCA"),]
-               )
+               Target_Pathway_PCA = Results[[3]][which(Results[[3]]$DataType == "Target_Pathway_PCA"),])
+pushToCC(Results, tagsToPass = list(list(name="object",value="processed_results")))
+# wf-798227871e
 
 uploadToBQ(Results$DZEnrichment, bqdataset = "s05_atopic_dermatitis", tableName = "Results_DZEnrichment")
 uploadToBQ(Results$Target_Cell, bqdataset = "s05_atopic_dermatitis", tableName = "Results_Target_Cell")

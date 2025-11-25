@@ -131,7 +131,11 @@ results = results[!stringr::str_detect(names(results),"wfid_table")]
 results = lapply(results, add_annotation, "francis")
 results = lapply(results, function(x) {colnames(x)[which(colnames(x) == "geneset")] <- "signature" ; return(x)})
 results$pseudobulk_X2_monocle_subcluster_k_5.csv$cell = francis_annotation$highAnnotation[match(results$pseudobulk_X2_monocle_subcluster_k_5.csv$cell, francis_annotation$Subcluster)]
+results$statistics_X2_monocle_subcluster_k_5_enrichmentInOneCelltype.csv$random_avg_es = NA
+results$statistics_X2_monocle_subcluster_k_5_enrichmentInOneCelltype.csv$cell = francis_annotation$highAnnotation[match(results$statistics_X2_monocle_subcluster_k_5_enrichmentInOneCelltype.csv$cell, francis_annotation$Subcluster)]
+
 uploadToBQ(table = results$pseudobulk_X2_monocle_subcluster_k_5.csv, bqdataset = bqdataset, tableName = "enrichmentInOneCelltype_pseudobulk", disposition = "WRITE_APPEND")
+uploadToBQ(table = results$statistics_X2_monocle_subcluster_k_5_enrichmentInOneCelltype.csv, bqdataset = bqdataset, tableName = "enrichmentInOneCelltype_statistics", disposition = "WRITE_APPEND")
 
 
 ### Test 2 - Coexpression
@@ -336,13 +340,12 @@ uploadToBQ(table = res, bqdataset = bqdataset, tableName = "landingPageTable")
 
 ## OFF THE BOOKS HYPERGEOMETRIC
 ## ==================================
-signatures = readRDS(get_workflow_outputs("wf-54d564beb9"))
-signatures = signatures$X2[c("x2_inhibition_early_50","x2_inhibition_early_50_archs_refined","SP_inhibition_late_50","SP_inhibition_late_50_archs_refined")]
+signatures = readRDS(get_workflow_outputs("wf-b1950a97bd"))
+signatures = signatures$X2[c("x2_general_inhibition_early_50", "x2_general_inhibition_early_50_archs_refined",
+                             "x2_activated_inhibition_early_50", "x2_activated_inhibition_early_50_archs_refined",
+                             "SP_general_inhibition_late_50", "SP_general_inhibition_late_50_archs_refined")]
 
-gxdiff = readRDS(get_workflow_outputs("wf-a121700ef7"))
-gxdiff = gxdiff %>%
-  dplyr::filter(comparison %in% c("SP_inhibited_vs_uninhibited_24hr","x2_inhibited_vs_activated_4hr")) %>%
-  dplyr::filter(estimate < 0)
+gxdiff = readRDS(get_workflow_outputs("wf-fe0c7701a0"))
 
 hg = lapply(signatures, function(x) cytoreason.gx::gx_gsa(x = as.character(x),
                                                           method = "hypergeometric",
