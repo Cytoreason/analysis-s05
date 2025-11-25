@@ -7,14 +7,13 @@ library(tidyverse)
 
 ### Prep signatures
 ### ==========================
-allSignatures = readRDS(get_workflow_outputs("wf-54d564beb9"))
+allSignatures = readRDS(get_workflow_outputs("wf-b1950a97bd"))
   allSignatures = allSignatures$X2
 geneMapping = toTable(org.Hs.eg.db::org.Hs.egSYMBOL)
 allSignatures = lapply(allSignatures, function(x) geneMapping$symbol[match(x, geneMapping$gene_id)])
 pushToCC(allSignatures, tagsToPass = list(list(name="object",value="allSignatures"),
                                           list(name="notes",value="symbol")))
-# wf-6590790158
-# wf-5600d586c2
+# wf-6ed5105e56
 
 ### Helper function
 ### ==========================
@@ -22,7 +21,7 @@ add_annotation = function(df, ann) {
   if(ann == "wu") {
     dataset = "Wu 2024 authors annotation"
     dataset_id="https://doi.org/10.1038/s41467-024-44994-w"
-    disease = "PSO"
+    disease = "AD"
   } else if(ann == "francis") {
     dataset = "Francis 2023 monocle k5 annotated"
     dataset_id="https://doi.org/10.1038/s41467-024-44994-w"
@@ -38,11 +37,11 @@ add_annotation = function(df, ann) {
 ### Prep coarse annotation
 ### ==========================
 hier = read.csv("~/data/WuADCells.csv")
-
+francis_annotation = read.csv("~/analysis-s05/data/Francis_clusters.051125.csv")
 
 ### Definitions
 ### ==========================
-allSignatures = readRDS(get_workflow_outputs("wf-5600d586c2"))
+allSignatures = readRDS(get_workflow_outputs("wf-6ed5105e56"))
 config = data.frame(geneset = names(allSignatures),
                     target = rep("MRGPRX2",length(allSignatures)),
                     receptors = rep("MRGPRX2",length(allSignatures)),
@@ -51,7 +50,7 @@ config = data.frame(geneset = names(allSignatures),
                     pathways_bioexp = rep("Inflammation;Cellular organization and differentiation",length(allSignatures)))
 
 genelist_name = "X2"
-genelist_wfid = "wf-5600d586c2"
+genelist_wfid = "wf-6ed5105e56"
 scdata_wfid = "wf-654d30a5b7" # Wu
 bqdataset = "s05_atopic_dermatitis" ### Please remember to change this, as to not overwrite the defaults
 image = "eu.gcr.io/cytoreason/ci-cytoreason.patern.benchmark-package:mayan_latest"
@@ -89,10 +88,9 @@ run_function_dist(FUN = enrichment_in_one_cell_type,
                               list(name="seurat_object",value=scdata_wfid),
                               list(name="annotation", value="local_supercluster")))
 
-# wf-a7a219220c
-# wf-6370038800
+# wf-a6992dd7d4
 
-results = apply(get_workflow_outputs("wf-6370038800", files_names_grepl_pattern = ".csv"), 1, read.csv)
+results = apply(get_workflow_outputs("wf-a6992dd7d4", files_names_grepl_pattern = ".csv"), 1, read.csv)
 results = results[!stringr::str_detect(names(results),"wfid_table")]
 results = lapply(results, add_annotation, "wu")
 results = lapply(results, function(x) {colnames(x)[which(colnames(x) == "geneset")] <- "signature" ; return(x)})
@@ -103,29 +101,37 @@ uploadToBQ(table = results$passfail_X2_local_supercluster_enrichmentInOneCelltyp
 uploadToBQ(table = results$statistics_X2_local_supercluster_enrichmentInOneCelltype.csv, bqdataset = bqdataset, tableName = "enrichmentInOneCelltype_statistics")
 uploadToBQ(table = results$pseudobulk_X2_local_supercluster.csv, bqdataset = bqdataset, tableName = "enrichmentInOneCelltype_pseudobulk")
 
-# ## Using Francis
-# run_function_dist(FUN = enrichment_in_one_cell_type,
-#                   seurat_wfid = "wf-4d667e568c", 
-#                   genelist = genelist_wfid, 
-#                   genelist_title = genelist_name,
-#                   config = config,
-#                   full_metadata = "wf-633678409f", 
-#                   cell_annotation = "monocle_subcluster_k_5", 
-#                   sample_annotation = "sample_id",
-#                   pseudobulk_random = "wf-e4d2d55319",
-#                   ES_column_random = 'avgES',
-#                   random_vs_all_randoms = "wf-85003efdac",
-#                   random_cell_vs_all_cells = 'wf-37adf19e63',
-#                   uploadTestToBQ = F,
-#                   BQ_dataset = bqdataset,
-#                   data_access = "s05", 
-#                   image = image,
-#                   tags = list(list(name="analysis",value="enrichment_in_one_cell_type"),
-#                               list(name="genelist", value=genelist_name),
-#                               list(name="seurat_object",value="wf-4d667e568c"),
-#                               list(name="annotation", value="monocle_subcluster_k_5")))
-# 
-# # wf-c3b9e76872
+
+## Using Francis
+run_function_dist(FUN = enrichment_in_one_cell_type,
+                  seurat_wfid = "wf-4d667e568c",
+                  genelist = genelist_wfid,
+                  genelist_title = genelist_name,
+                  config = config,
+                  full_metadata = "wf-633678409f",
+                  cell_annotation = "monocle_subcluster_k_5",
+                  sample_annotation = "sample_id",
+                  pseudobulk_random = "wf-e4d2d55319",
+                  ES_column_random = 'avgES',
+                  random_vs_all_randoms = "wf-85003efdac",
+                  random_cell_vs_all_cells = 'wf-37adf19e63',
+                  uploadTestToBQ = F,
+                  BQ_dataset = bqdataset,
+                  data_access = "s05",
+                  image = image,
+                  tags = list(list(name="analysis",value="enrichment_in_one_cell_type"),
+                              list(name="genelist", value=genelist_name),
+                              list(name="seurat_object",value="wf-4d667e568c"),
+                              list(name="annotation", value="monocle_subcluster_k_5")))
+
+# wf-a41eb66392
+
+results = apply(get_workflow_outputs("wf-a41eb66392", files_names_grepl_pattern = ".csv"), 1, read.csv)
+results = results[!stringr::str_detect(names(results),"wfid_table")]
+results = lapply(results, add_annotation, "francis")
+results = lapply(results, function(x) {colnames(x)[which(colnames(x) == "geneset")] <- "signature" ; return(x)})
+results$pseudobulk_X2_monocle_subcluster_k_5.csv$cell = francis_annotation$highAnnotation[match(results$pseudobulk_X2_monocle_subcluster_k_5.csv$cell, francis_annotation$Subcluster)]
+uploadToBQ(table = results$pseudobulk_X2_monocle_subcluster_k_5.csv, bqdataset = bqdataset, tableName = "enrichmentInOneCelltype_pseudobulk", disposition = "WRITE_APPEND")
 
 
 ### Test 2 - Coexpression
@@ -139,7 +145,7 @@ run_function_dist(FUN = genelist_receptor_coexpression,
                   gene_cell_vs_all_cells='wf-1d9581bf59',
                   pb_gene = 'wf-1ee1ffbb7b',
                   percentiles =  "wf-db4beb5ecf",
-                  test1_wfid = "wf-6370038800",
+                  test1_wfid = "wf-a6992dd7d4",
                   uploadTestToBQ = F,
                   BQ_dataset = bqdataset,
                   image = "eu.gcr.io/cytoreason/ci-cytoreason.patern.benchmark-package:mayan_latest",
@@ -148,10 +154,9 @@ run_function_dist(FUN = genelist_receptor_coexpression,
                               list(name="genelist", value=genelist_name),
                               list(name="seurat_object",value=scdata_wfid),
                               list(name="annotation", value="local_supercluster")))
-# wf-393cecd739
-# wf-93d184a374
+# wf-6d474f2d7e
 
-results = apply(get_workflow_outputs("wf-393cecd739", files_names_grepl_pattern = ".csv"), 1, read.csv)
+results = apply(get_workflow_outputs("wf-6d474f2d7e", files_names_grepl_pattern = ".csv"), 1, read.csv)
 results = lapply(results, add_annotation, "wu")
 results = lapply(results, function(x) {colnames(x)[which(colnames(x) == "geneset")] <- "signature" ; return(x)})
 results$statistics_X2_local_supercluster_coexpression.csv$coarse_annotation = hier$celltype[match(results$statistics_X2_local_supercluster_coexpression.csv$cell, hier$local_supercluster)]
@@ -175,10 +180,9 @@ run_function_dist(FUN = enrichment_in_treatments,
                   tags = list(list(name="analysis",value="enrichment_in_treatments"),
                               list(name="genelist", value=genelist_name),
                               list(name="seurat_object",value=scdata_wfid)))
-# wf-0fdb40ddc1
-# wf-30498594d1
+# wf-418b0c303b
 
-enrichment_results = apply(get_workflow_outputs("wf-30498594d1", files_names_grepl_pattern = ".csv"), 1, read.csv, sep = ",")
+enrichment_results = apply(get_workflow_outputs("wf-418b0c303b", files_names_grepl_pattern = ".csv"), 1, read.csv, sep = ",")
 enrichment_results = lapply(enrichment_results, function(x) {colnames(x)[which(colnames(x) == "geneset")] <- "signature" ; return(x)})
 enrichment_results$treatments_X2_enrichments.csv$a_group_name = 
   enrichment_results$treatments_X2_enrichments.csv$b_group_name = 
@@ -205,10 +209,9 @@ run_function_dist(FUN = enrichment_in_disease,
                   tags = list(list(name="analysis",value="enrichment_in_disease"),
                               list(name="genelist", value=genelist_name),
                               list(name="seurat_object",value=scdata_wfid)))
-# wf-5cb62acda1
-# wf-908be3e391
+# wf-e0eff2bce6
 
-enrichment_results = apply(get_workflow_outputs("wf-908be3e391", files_names_grepl_pattern = ".csv"), 1, read.csv, sep = ",")
+enrichment_results = apply(get_workflow_outputs("wf-e0eff2bce6", files_names_grepl_pattern = ".csv"), 1, read.csv, sep = ",")
 enrichment_results = lapply(enrichment_results, function(x) {colnames(x)[which(colnames(x) == "geneset")] <- "signature" ; return(x)})
 enrichment_results$statistics_X2_enrichedInDisease.csv$n_datasets = 
   enrichment_results$statistics_X2_enrichedInDisease.csv$n_control_samples = 
@@ -233,10 +236,9 @@ run_function_dist(FUN = gene_overlap,
                               list(name="genelist", value=genelist_name),
                               list(name="seurat_object",value=scdata_wfid)))
 
-# wf-76f2324cdf
-# wf-438134fa2c
+# wf-64fb6e2ee4
 
-res = get_workflow_outputs("wf-438134fa2c", files_names_grepl_pattern = ".csv", should_download_files = T)
+res = get_workflow_outputs("wf-64fb6e2ee4", files_names_grepl_pattern = ".csv", should_download_files = T)
 
 order_file <- res[str_detect(rownames(res), "clustering_order")]
 overlap_file <- res[str_detect(rownames(res), "geneOverlap")]
@@ -270,7 +272,7 @@ run_function_dist(FUN = target_pathway_category_enrichment,
                   pathways_genes_category_mapping = "wf-19f8069473",
                   pathways_category_level = "level0",
                   genes_background = 'wf-6f21780a5d',
-                  dont_rerun_pathway_enrichment_wfid = "wf-078cfb6e86", # This was added because remote_parallel_hg failed. it's the wfid of pathways_df
+                  dont_rerun_pathway_enrichment_wfid = "wf-fb07b5b2c6", # This was added because remote_parallel_hg failed. it's the wfid of pathways_df
                   pathways_collections = c("reactome", "kegg"),
                   n_parallel_workers = 20,
                   uploadTestToBQ = F,
@@ -281,10 +283,9 @@ run_function_dist(FUN = target_pathway_category_enrichment,
                               list(name="genelist", value=genelist_name),
                               list(name="pipline", value="signatures validations")))
 
-# wf-35c3fefddf
-# wf-8a9e6e3808
+# wf-567ab144a8
 
-res = apply(get_workflow_outputs("wf-8a9e6e3808", files_names_grepl_pattern = ".csv"), 1, read.csv)
+res = apply(get_workflow_outputs("wf-567ab144a8", files_names_grepl_pattern = ".csv"), 1, read.csv)
 
 res <- lapply(res, function(df) {
   df <- df %>%
@@ -310,11 +311,11 @@ uploadToBQ(table = res$categoriesPassFail_X2_pathwaysEnrichmentPerCategory.csv, 
 ### =========================================================================
 devtools::load_all("~/patern-benchmark/R/landing_page_tables.R")
 run_function_dist(FUN = get_landing_page_table,
-                  test1_summary_table = "wf-6370038800",
-                  test2_summary_table = "wf-93d184a374",
-                  test3_summary_table = "wf-30498594d1",
-                  test4_summary_table = "wf-908be3e391",
-                  test6_summary_table = "wf-8a9e6e3808",
+                  test1_summary_table = "wf-a6992dd7d4",
+                  test2_summary_table = "wf-6d474f2d7e",
+                  test3_summary_table = "wf-418b0c303b",
+                  test4_summary_table = "wf-e0eff2bce6",
+                  test6_summary_table = "wf-567ab144a8",
                   genelist_title = genelist_name,
                   config=config,
                   uploadTestToBQ = F,
@@ -324,17 +325,15 @@ run_function_dist(FUN = get_landing_page_table,
                   tags = list(list(name="analysis",value="join all pass-fail tables"),
                               list(name="genelist", value=genelist_name),
                               list(name="pipline", value="signatures validations")))
-# wf-f91d9f2e0a
+# wf-9c0669d1c4
 
-res = read.csv(get_workflow_outputs("wf-f91d9f2e0a", files_names_grepl_pattern = ".csv"))%>%
+res = read.csv(get_workflow_outputs("wf-9c0669d1c4", files_names_grepl_pattern = ".csv"))%>%
   dplyr::rename(signature = geneset)%>%
   dplyr::mutate(target = config[match(signature, config$geneset),]$target)
 
 uploadToBQ(table = res, bqdataset = bqdataset, tableName = "landingPageTable")
 
 
-<<<<<<< Updated upstream
-=======
 ## OFF THE BOOKS HYPERGEOMETRIC
 ## ==================================
 signatures = readRDS(get_workflow_outputs("wf-54d564beb9"))
@@ -369,7 +368,6 @@ uploadToBQ(table = hg_final, bqdataset = bqdataset, tableName = "X2Signatures_hy
 # Visualizations
 # =======================
 # Landing table
->>>>>>> Stashed changes
 library(ComplexHeatmap)
 res = res[which(res$collection %in% c("","reactom")),]
 res = res[str_detect(res$signature,"_ep"),]

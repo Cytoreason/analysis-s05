@@ -41,61 +41,54 @@ pushToCC <- function(obj, filename = "output", data_access = "s05", tagsToPass =
 #' @param tableName - the name we want to call the table in BQ - no special characters other than _
 #' @param subsetting - if the wfid outputs a list, this will use the element in the list specified.
 #' @param disposition - specific write_disposition specification. Default is "WRITE_TRUNCATE"
-uploadToBQ = function(table, bqdataset, tableName, subsetting = NULL, disposition = "WRITE_TRUNCATE"){
-  # if(!require(bigquery)) BiocManager::install("bigquery")
+uploadToBQ <- function(table, bqdataset, tableName, subsetting = NULL, disposition = "WRITE_TRUNCATE") {
   library(bigrquery)
-  # options(cache = TRUE, cache.lazy = FALSE)
   
-  if(is.character(table)){
-    cat("\nUploading",table,"to",bqdataset,"\n")
-    table = cytoreason.ccm.pipeline::read_asset(table, quiet = T)
+  if (is.character(table)) {
+    cat("\nUploading", table, "to", bqdataset, "\n")
+    table <- cytoreason.ccm.pipeline::read_asset(table, quiet = TRUE)
     cat("\nData loaded\n")
   }
   
-  if(length(subsetting == "NULL") == 0) { subsetting = NULL }
+  if (!is.null(subsetting)) {
+    table <- table[[subsetting]]
+  }
   
-  if(!is.null(subsetting)){
-    table = table[[subsetting]]
-  }
-  if(any(stringr::str_detect(colnames(table), " |\\.|,"))){
-    colnames(table) = stringr::str_replace_all(colnames(table), pattern = " ", replacement = "_")
-    colnames(table) = stringr::str_replace_all(colnames(table), pattern = "\\.", replacement = "_")
-    colnames(table) = stringr::str_replace_all(colnames(table), pattern = ",", replacement = "")
-  }
-  tableName = stringr::str_replace_all(tableName, pattern = "\\.", replacement = "_") # make sure there are no . or whitespace
-  tableName = stringr::str_replace_all(tableName, pattern = " ", replacement = "_") # make sure there are no . or whitespace
-  parts = seq(1,nrow(table),by=1e6)
-  if(nrow(table) > 2e6){ # upload in chunks
-    sapply(parts, function(i){
-      cat("\nuploading chunk",i,"-",(i+1e6-1))
-      if(i == 1){
-        job = bq_perform_upload(bq_table("cytoreason",bqdataset,table=tableName),
-                          table[i:(i+1e6-1),], write_disposition = disposition)
-      } else if(i == parts[length(parts)]) { # last part
-        cat("\ruploading chunk",i,"-",nrow(table))
-        job = bq_perform_upload(bq_table("cytoreason",bqdataset,table=tableName),
-                          table[i:nrow(table),], write_disposition = "write_append")
-      } else {
-        job = bq_perform_upload(bq_table("cytoreason",bqdataset,table=tableName),
-                          table[i:(i+1e6-1),], write_disposition = "write_append")
-      }
-      gc(verbose = F)
+  # Clean names
+  colnames(table) <- stringr::str_replace_all(colnames(table), "[ |\\.|,]", "_")
+  tableName <- stringr::str_replace_all(tableName, "[\\. ]", "_")
+  
+  if (nrow(table) > 2e6) { # upload in chunks
+    parts <- seq(1, nrow(table), by = 1e6)
+    jobs <- lapply(parts, function(i) {
+      start <- i
+      end <- min(i + 1e6 - 1, nrow(table))
+      
+      cat("\nUploading chunk", start, "-", end)
+      disposition_chunk <- if (i == 1) disposition else "WRITE_APPEND"
+      job <- bq_perform_upload(bq_table("cytoreason", bqdataset, table = tableName), table[start:end, ], write_disposition = disposition_chunk)
+      return(job)
     })
+    
   } else { # upload all at once
-    job = bq_perform_upload(x = bq_table("cytoreason",bqdataset,table=tableName), values = table, write_disposition = disposition)
+    job <- bq_perform_upload(bq_table("cytoreason", bqdataset, table = tableName), table, write_disposition = disposition)
+    bq_job_wait(job)
+    jobs <- list(job)
   }
   
-  bq_job_wait(job)
-  status <- bq_job_status(job)
+  # Check status of last job
+  status <- bq_job_status(jobs[[length(jobs)]])
   
   if (!is.null(status$errorResult)) {
     stop(paste("BigQuery upload failed:", status$errorResult$message))
   } else {
     message("Upload completed successfully.")
   }
+  
   gc()
   rm(table)
 }
+
 
 
 
