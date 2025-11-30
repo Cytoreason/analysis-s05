@@ -91,8 +91,9 @@ pathLoadings$value[which(pathLoadings$pc == "PC1")] = (-1) * pathLoadings$value[
 
 pathLoadings.BQ = pathLoadings[,c("pc","feature_id","value")]
 colnames(pathLoadings.BQ) = c("PC","Pathway","Loading")
-pathLoadings.BQ$submodel = "bulk"
+# pathLoadings.BQ$submodel = "bulk"
 # uploadToBQ(pathLoadings.BQ, bqdataset = "s05_atopic_dermatitis", tableName = "pathwayLoadings") # only in bulk
+pathLoadings.BQ$submodel = "adjusted"
 uploadToBQ(pathLoadings.BQ, bqdataset = "s05_atopic_dermatitis", tableName = "pathwayLoadings", disposition = "WRITE_APPEND")
 
 

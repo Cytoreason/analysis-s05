@@ -252,3 +252,28 @@ geneset_network_measures <- function(net,genesets_list){
   }))
   
 }
+
+
+CollapseToParam <- function(x) {
+  library(tidyverse)
+  x <- x %>%
+    select(ListType, ListName,
+           density,
+           largest_component_frac,
+           largest_connected_component_density,
+           largest_connected_component_diameter_frac,
+           largest_connected_component_diameter_weighted_frac) %>%
+    mutate(across(where(is.numeric),
+                  ~ ifelse(is.infinite(.) | is.nan(.), 0, .))) %>%
+    pivot_longer(cols = c(density,
+                          largest_component_frac,
+                          largest_connected_component_density,
+                          largest_connected_component_diameter_frac,
+                          largest_connected_component_diameter_weighted_frac),
+                 names_to = "Criteria",
+                 values_to = "value") %>%
+    pivot_wider(names_from = ListType, values_from = value) %>%
+    mutate(pval = 1 - rowMeans(gene_list > as.matrix(across(starts_with("rand_iter")))))  %>%
+    dplyr::select(ListName,Criteria,pval)
+  return(x)
+}
