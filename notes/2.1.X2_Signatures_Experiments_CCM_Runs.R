@@ -351,3 +351,107 @@ for(chosenMetric in c("fdr","pvalue")) {
 
 # clean envir
 rm(dat, twentyfour, four, FDRlabel, nSig, x2_24h, x2_4h, gx)
+
+
+### Inhibition vs activation
+gxdiff = readRDS(get_workflow_outputs("wf-fe0c7701a0"))
+gx_4hr = gxdiff %>%
+  dplyr::filter(comparison %in% c("activated_vs_unactivated_4hr","inhibited_vs_activated_4hr")) %>%
+  dplyr::filter(agonist == "All") %>%
+  mutate(axis = ifelse(str_detect(comparison, "inhibited"),"Inhibition","Activation")) %>%
+  mutate(signedP = sign(estimate) * log10_pvalue) %>%
+  pivot_wider(id_cols = feature_id, names_from = axis, values_from = "signedP")
+
+nSigActivated = length(which(abs(gx_4hr$Activation) >= -log10(0.05)))
+threshold <- abs(log10(0.05))
+
+gx_4hr$direction <- apply(gx_4hr, 1, function(row) {
+  act <- as.numeric(row["Activation"])
+  inh <- as.numeric(row["Inhibition"])
+  
+  act_sig <- abs(act) >= threshold
+  inh_sig <- abs(inh) >= threshold
+  
+  if (!act_sig & !inh_sig) {
+    return("non-significant")
+  } else if (act_sig & !inh_sig) {
+    return(ifelse(act > 0, "only activated (up)", "only activated (down)"))
+  } else if (act_sig & inh_sig) {
+    return(ifelse(act > 0, "activated and inhibited (up)", "activated and inhibited (down)"))
+  } else {
+    return("non-significant")
+  }
+})
+gx_4hr$direction[which(gx_4hr$feature_id %in% c("79696","30835","57717"))] <- "only activated (down)" # edge case
+color = c("activated and inhibited (up)" = "#003f5c",
+          "activated and inhibited (down)" = "#58508d",
+          "only activated (up)" = "#bc5090",
+          "only activated (down)" = "#ffa600",
+          "non-significant" = "grey")
+nSig = as.data.frame(table(gx_4hr$direction)) %>%
+  mutate(label = paste0("n=",Freq)) %>%
+  mutate(label = ifelse(Var1 == "non-significant", NA, label)) %>%
+  mutate(freq=round(Freq * 100/nSigActivated))
+
+ggplot(gx_4hr, aes(x = Activation, y = Inhibition)) +
+  geom_point(aes(color = direction)) +
+  geom_hline(yintercept = c(-log10(0.05),log10(0.05)), linetype = "dashed") +
+  geom_vline(xintercept = c(-log10(0.05),log10(0.05)), linetype = "dashed") +
+  scale_color_manual(values = color) +
+  annotate(geom="text", x = 2.5, y = -8, label = "n=381\n(19%)", color = "#003f5c", fontface = "bold")+
+  annotate(geom="text", x = 5, y = 0, label = "n=419\n(21%)", color = "#bc5090", fontface = "bold")+
+  annotate(geom="text", x = -5, y = 0, label = "n=698\n(36%)", color = "#ffa600", fontface = "bold")+
+  annotate(geom="text", x = -5.5, y = 6, label = "n=464\n(24%)", color = "#58508d", fontface = "bold") +
+  theme_minimal() +
+  labs(color = NULL)
+ggsave("~/analysis-s05/figures/X2_Signature/activationVSinhibition_4hr.png", scale = 2.5, bg = "white")
+
+
+gx_24hr = gxdiff %>%
+  dplyr::filter(comparison %in% c("SP_activated_vs_unactivated_24hr","SP_inhibited_vs_uninhibited_24hr")) %>%
+  mutate(axis = ifelse(str_detect(comparison, "inhibited"),"Inhibition","Activation")) %>%
+  mutate(signedP = sign(estimate) * log10_pvalue) %>%
+  pivot_wider(id_cols = feature_id, names_from = axis, values_from = "signedP")
+
+nSigActivated = length(which(abs(gx_24hr$Activation) >= -log10(0.05)))
+threshold <- abs(log10(0.05))
+
+gx_24hr$direction <- apply(gx_24hr, 1, function(row) {
+  act <- as.numeric(row["Activation"])
+  inh <- as.numeric(row["Inhibition"])
+  
+  act_sig <- abs(act) >= threshold
+  inh_sig <- abs(inh) >= threshold
+  
+  if (!act_sig & !inh_sig) {
+    return("non-significant")
+  } else if (act_sig & !inh_sig) {
+    return(ifelse(act > 0, "only activated (up)", "only activated (down)"))
+  } else if (act_sig & inh_sig) {
+    return(ifelse(act > 0, "activated and inhibited (up)", "activated and inhibited (down)"))
+  } else {
+    return("non-significant")
+  }
+})
+color = c("activated and inhibited (up)" = "#003f5c",
+          "activated and inhibited (down)" = "#58508d",
+          "only activated (up)" = "#bc5090",
+          "only activated (down)" = "#ffa600",
+          "non-significant" = "grey")
+nSig = as.data.frame(table(gx_24hr$direction)) %>%
+  mutate(label = paste0("n=",Freq)) %>%
+  mutate(label = ifelse(Var1 == "non-significant", NA, label)) %>%
+  mutate(freq=round(Freq * 100/nSigActivated))
+
+ggplot(gx_24hr, aes(x = Activation, y = Inhibition)) +
+  geom_point(aes(color = direction)) +
+  geom_hline(yintercept = c(-log10(0.05),log10(0.05)), linetype = "dashed") +
+  geom_vline(xintercept = c(-log10(0.05),log10(0.05)), linetype = "dashed") +
+  scale_color_manual(values = color) +
+  annotate(geom="text", x = 2.5, y = -5, label = "n=76\n(10%)", color = "#003f5c", fontface = "bold")+
+  annotate(geom="text", x = 4, y = 0, label = "n=283\n(38%)", color = "#bc5090", fontface = "bold")+
+  annotate(geom="text", x = -4, y = 0, label = "n=292\n(39%)", color = "#ffa600", fontface = "bold")+
+  annotate(geom="text", x = -4, y = 3, label = "n=91\n(12%)", color = "#58508d", fontface = "bold") +
+  theme_minimal() +
+  labs(color = NULL)
+ggsave("~/analysis-s05/figures/X2_Signature/activationVSinhibition_24hr.png", scale = 2.5, bg = "white")

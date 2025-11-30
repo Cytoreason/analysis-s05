@@ -159,9 +159,14 @@ collectionMapping = lapply(names(list(x2=x2,ligands=ligands, positives=positives
 }) %>% do.call(rbind,.)
 collectionMapping$collection[which(collectionMapping$signature == "mast_tryptase")] <- "Mast"
 collectionMapping$collection[which(collectionMapping$collection == "Nc")] <- "NegativeControls"
+collectionMapping$collection[str_detect(collectionMapping$signature,"BMP|TGFB")] <- "Negative Controls"
+collectionMapping$collection[str_detect(collectionMapping$signature,"NGF|BDNF|NO|NRG1|NTF4")] <- "Neuronal"
 collectionMapping = rbind(collectionMapping, data.frame(signature = c("smoothedRandom_top50",
                                                  "smoothedRandom_bottom50",
                                                  "random"),
                                                collection = rep("Negative Controls",3)))
 pushToCC(collectionMapping)
-# wf-6b6125369c
+# wf-d3240e7fb6
+
+
+collectionMapping = readRDS(get_workflow_outputs("wf-6b6125369c"))

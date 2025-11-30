@@ -46,7 +46,7 @@ uploadToBQ(ct_test, bqdataset = "s05_atopic_dermatitis", tableName = "AD_ct_test
 # --------------------------------------
 unified_metadata = read_asset("wf-e82a5ab3b6")
 unified_metadata$sample_classification[which(unified_metadata$sample_classification == "Normal")] <- "HC"
-uploadToBQ(unified_metadata, bqdataset = "s05_atopic_dermatitis", tableName = "AD_sample_metadata")
+# uploadToBQ(unified_metadata, bqdataset = "s05_atopic_dermatitis", tableName = "AD_sample_metadata") # is further edited in the meta PC section
 
 sampleClassifications.inventory = unified_metadata %>%
   dplyr::filter(is.na(time) | time %in% c("D0","D1")) %>%

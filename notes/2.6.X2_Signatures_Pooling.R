@@ -10,7 +10,7 @@ library(bigrquery)
 allSignatures = bq_table_download(x = bq_table(project = "cytoreason", dataset = "s05_atopic_dermatitis", table="X2Signatures"))
 allSignatures = split(allSignatures$feature_id, allSignatures$signature)
 pushToCC(allSignatures, tagsToPass = list(list(name="object",value="allSignatures")))
-# wf-54cc53aaf8
+# wf-22e4f9b0af
 
 nc = readRDS(get_workflow_outputs("wf-905e97fa64"))
   nc$smoothedRandom = lapply(nc$smoothedRandom, function(x) names(x))
@@ -26,70 +26,94 @@ pushToCC(allSignatures, tagsToPass = list(list(name="object",value="allSignature
 
 # Overlap graphs
 # ===============================
-ann = function(signatures){
-  df = data.frame(row.names = names(signatures),
-                  # agonist = sapply(names(signatures), function(x) str_split(x," ")[[1]][1]),
-                  treatment = str_extract(names(signatures),"activation|inhibition"),
-                  refined = str_extract(names(signatures),"refined"))
+ann = function(sigs){
+  df = data.frame(row.names = names(sigs),
+                  agonist = sapply(names(sigs), function(x) str_split(x," ")[[1]][1]),
+                  treatment = str_extract(names(sigs),"activation|inhibition"),
+                  refined = str_extract(names(sigs),"refined"))
 
   ann_colors = list(
-    # agonist = c("x2" = "#003f5c", "Untreated" = "#374c80", "CST14" = "#7a5195","Icatibant" = "#bc5090", "PAMP12" = "#ef5675", "SP" = "#ff764a", "aIgE" = "#ffa600"),  # replace with actual agonist names
-    treatment = c("activation" = "orange", "inhibition" = "purple"),
+    agonist = c("x2" = "#003f5c", "Untreated" = "#374c80", "CST14" = "#7a5195","Icatibant" = "#bc5090", "PAMP12" = "#ef5675", "SP" = "#ff764a", "aIgE" = "#ffa600"),  # replace with actual agonist names
+    treatment = c("activation" = "orange", "inhibition" = "green"),
     refined = c("refined" = "black", "NA" = "white")  # handle NA if needed
   )
 
   ann = HeatmapAnnotation(df = df, which = "row", col = ann_colors)
 }
 
-reconstruct_signature_name = function(sig){
+reconstruct_signature_name = function(sig, inhibition = F){
   signature = str_split(sig, "_")[[1]]
-  new_sig = c(signature[1],signature[3],signature[2])
+  if(inhibition) {
+    new_sig = c(signature[1],signature[4],signature[2],signature[3])
+  } else {
+    new_sig = c(signature[1],signature[3],signature[2])
+  }
   if("refined" %in% signature) {
     new_sig = c(new_sig, "(refined)")
   }
   return(paste0(new_sig, collapse = " "))
 }
 
-allSignatures = readRDS(get_workflow_outputs("wf-6d9a2c3a80"))
+allSignatures = readRDS(get_workflow_outputs("wf-22e4f9b0af"))
 signatures = allSignatures[str_detect(names(allSignatures),"50")]
-signatures = signatures[!str_detect(names(signatures), "string|archs(?!_)|p_refined|top100|bottom100|50_refined")]
-signatures = signatures[!str_detect(names(signatures), "IgE_inhibition|CST14_inhibition|Icatibant_inhibition|PAMP12_inhibition|SP_inhibition_early|Untreated_inhibition")]
-signatures = signatures[!str_detect(names(signatures), "Tryptase")]
-signatures = signatures[!str_detect(names(signatures), "x2_inhibition_late")]
+signatures = signatures[!str_detect(names(signatures), "string|archs(?!_)|p_refined|top100|bottom100|50_refined|cov")]
+signatures = signatures[!str_detect(names(signatures), "tryptase")]
+signatures = signatures[!str_detect(names(signatures), "x2_general_inhibition_late|x2_activation_late|x2_activated_inhibition_late")]
+inhibition_signatures = signatures
 
-hm.signatures = signatures
-names(hm.signatures) = lapply(names(hm.signatures), reconstruct_signature_name)
+hm.signatures = signatures[!str_detect(names(signatures), "IgE_general|CST14_general|Icatibant_general|PAMP12_general|SP_general_inhibition_early|Untreated_general")]
+names(hm.signatures) = lapply(names(hm.signatures), function(x) reconstruct_signature_name(x, inhibition = ifelse(str_detect(x,"inhibition"),T,F)))
 
 activation = hm.signatures[str_detect(names(hm.signatures),"activation")]
 inhibition = hm.signatures[str_detect(names(hm.signatures),"inhibition")]
+pooling_activation = hm.signatures[!str_detect(names(hm.signatures),"refined|late|inhibition")]
+
+inhibition_signatures = inhibition_signatures[!str_detect(names(inhibition_signatures),"activation|refined|late")]
+names(inhibition_signatures) = lapply(names(inhibition_signatures), reconstruct_signature_name, inhibition = T) %>% do.call(c,.)
 
 overlap = sapply(hm.signatures, function(x) sapply(hm.signatures, function(y) length(intersect(x,y))))
 overlap_activation = sapply(activation, function(x) sapply(activation, function(y) length(intersect(x,y))))
 overlap_inhibition = sapply(inhibition, function(x) sapply(inhibition, function(y) length(intersect(x,y))))
+overlap_pooling_activation = sapply(pooling_activation, function(x) sapply(pooling_activation, function(y) length(intersect(x,y))))
+overlap_pooling_inhibition = sapply(inhibition_signatures, function(x) sapply(inhibition_signatures, function(y) length(intersect(x,y))))
+
 
 # all signatures
 png("~/analysis-s05/figures/X2_Signature/overlap.png", res = "100", bg = "transparent", width = 900, height = 700)
-Heatmap(overlap, name = "overlap", row_names_gp = gpar(fontsize = 10), right_annotation = ann(signatures),
+Heatmap(overlap, name = "overlap", row_names_gp = gpar(fontsize = 10), right_annotation = ann(hm.signatures),
         column_names_gp = gpar(fontsize=10), cell_fun = function(j, i, x, y, width, height, fill) {
-          if(overlap[i, j] >= 25) grid.text(overlap[i, j], x, y, gp = gpar(fontsize = 10))})
+          if(overlap[i, j] >= 10) grid.text(overlap[i, j], x, y, gp = gpar(fontsize = 10))})
 dev.off()
 
 
 # activation
 png("~/analysis-s05/figures/X2_Signature/overlap_activation.png", res = "100", bg = "transparent", width = 900, height = 700)
-Heatmap(overlap_activation, name = "overlap", row_names_gp = gpar(fontsize = 10),
+Heatmap(overlap_activation, name = "overlap", row_names_gp = gpar(fontsize = 10), right_annotation = ann(activation),
         column_names_gp = gpar(fontsize=10), cell_fun = function(j, i, x, y, width, height, fill) {
-          if(overlap_activation[i, j] >= 25) grid.text(overlap_activation[i, j], x, y, gp = gpar(fontsize = 10))})
+          if(overlap_activation[i, j] >= 10) grid.text(overlap_activation[i, j], x, y, gp = gpar(fontsize = 10))})
 dev.off()
 
 
 # inhibition
 png("~/analysis-s05/figures/X2_Signature/overlap_inhibition.png", res = "100", bg = "transparent", width = 900, height = 700)
-Heatmap(overlap_inhibition, name = "overlap", row_names_gp = gpar(fontsize = 10),
+Heatmap(overlap_inhibition, name = "overlap", row_names_gp = gpar(fontsize = 10), right_annotation = ann(inhibition),
         column_names_gp = gpar(fontsize=10), cell_fun = function(j, i, x, y, width, height, fill) {
-          if(overlap_inhibition[i, j] >= 25) grid.text(overlap_inhibition[i, j], x, y, gp = gpar(fontsize = 10))})
+          if(overlap_inhibition[i, j] >= 10) grid.text(overlap_inhibition[i, j], x, y, gp = gpar(fontsize = 10))})
 dev.off()
 
+# pooled inhibition
+png("~/analysis-s05/figures/X2_Signature/overlap_pooled_inhibition.png", res = "100", bg = "transparent", width = 900, height = 700)
+Heatmap(overlap_pooling_inhibition, name = "overlap", row_names_gp = gpar(fontsize = 10), right_annotation = ann(inhibition_signatures),
+        column_names_gp = gpar(fontsize=10), cell_fun = function(j, i, x, y, width, height, fill) {
+          if(overlap_pooling_inhibition[i, j] >= 1) grid.text(overlap_pooling_inhibition[i, j], x, y, gp = gpar(fontsize = 10))})
+dev.off()
+
+# pooled activation
+png("~/analysis-s05/figures/X2_Signature/overlap_pooled_activation.png", res = "100", bg = "transparent", width = 900, height = 700)
+Heatmap(overlap_pooling_activation, name = "overlap", row_names_gp = gpar(fontsize = 10), right_annotation = ann(pooling_activation),
+        column_names_gp = gpar(fontsize=10), cell_fun = function(j, i, x, y, width, height, fill) {
+          if(overlap_pooling_activation[i, j] >= 1) grid.text(overlap_pooling_activation[i, j], x, y, gp = gpar(fontsize = 10))})
+dev.off()
 
 
 # Which genes were lost in the refinement
@@ -122,7 +146,7 @@ archs_refined = signatures[str_detect(names(signatures),"refined")]
 
 results <- compare_gene_loss(mcs, archs_refined, "_archs_refined")
 results$sig = ifelse(!str_detect(results$signature,"archs"),"Mast Cell\nSpecific","Refined")
-results$signature = sapply(results$signature, reconstruct_signature_name)
+results$signature = sapply(results$signature, function(x) reconstruct_signature_name(x, inhibition = ifelse(str_detect(x,"inhibition"),T,F)))
 
 p1 = ggplot(results, aes(x = lost, y = signature, fill = sig)) +
   geom_col(position = "dodge", fill = "#0087c5") +

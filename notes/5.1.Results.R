@@ -5,15 +5,9 @@
 # ------------------------------------------
 devtools::load_all("~/analysis-s05/R/utils.R")
 library(cytoreason.ccm.pipeline) # make sure to load version >= 1.0.1
-library(cytoreason.assets)
 library(tidyverse)
 
 ccm_wfid = "wf-8e948630d7"
-ccm = as_ccm_fit(ccm_wfid)
-targetMapping = read_asset("wf-6c4b539629") # taken from "2.7.Final_Signatures.R"
-geneCollections = unique(targetMapping$Target.Collection)
-geneMapping = toTable(org.Hs.eg.db::org.Hs.egSYMBOL)
-collectionMapping = readRDS(get_workflow_outputs("wf-6b6125369c"))
 
 # 2. Extraction
 # ----------------------------
@@ -60,7 +54,7 @@ run_function_dist(FUN = function(ccm_wfid){
   TargetFeatures = build_service_result_tables(ccm$meta$L_vs_NL$feature_geneset_correlations,
                                                subset = ~(submodel %in% c("bulk", "adjusted__1__1") &
                                                             term == "L" &
-                                                            !collection_1 %in% c(collections, "c2.cp.kegg", "c2.cp.reactome")))
+                                                            !collection_1 %in% c("c2.cgp","c2.cp.biocarta","c2.cp","c3.tft","c7","c2.cp.kegg","c2.cp.reactome")))
   TargetFeatures = bind_rows(TargetFeatures$cell_contribution_geneset_correlations,
                              TargetFeatures$gene_geneset_correlations,
                              TargetFeatures$gene_set_activity_geneset_correlations)
@@ -70,12 +64,14 @@ run_function_dist(FUN = function(ccm_wfid){
   return(Results)
 },
 ccm_wfid = ccm_wfid,
-memory_request = "100Gi",
+memory_request = "25Gi",
 image = "eu.gcr.io/cytoreason/ci-cytoreason.ccm.pipeline-package:master_latest")
 # wf-213be9d205
 # wf-4a73197f02
+# wf-d4494fb9b7
+# wf-3c1660f432
 
-Results = readRDS(get_workflow_outputs("wf-4a73197f02"))
+Results = readRDS(get_workflow_outputs("wf-3c1660f432"))
 
 
 # 3. Editing to keep only what we're interested in
@@ -90,10 +86,11 @@ run_function_dist(FUN = function(results_wfid){
   library(dplyr)
   library(stringr)
 
+  results_wfid = get_workflow(results_wfid, wait = T)
   Results = readRDS(get_workflow_outputs(results_wfid))
   targetMapping = readRDS(get_workflow_outputs("wf-6c4b539629")) # taken from "2.7.Final_Signatures.R"
   geneCollections = unique(targetMapping$Target.Collection)
-  collectionMapping = readRDS(get_workflow_outputs("wf-6b6125369c"))
+  collectionMapping = readRDS(get_workflow_outputs("wf-d3240e7fb6"))
 
 
   processResults = function(data, tableName) {
@@ -158,16 +155,21 @@ run_function_dist(FUN = function(results_wfid){
     }
 
     newtable$Target.Collection = collectionMapping$collection[match(newtable$Target.Identifier, collectionMapping$signature)]
+    
     return(newtable)
   }
 
   Results = lapply(names(Results), function(dataName) processResults(data = Results[[dataName]], tableName = dataName))
   return(Results)
-}, results_wfid = "wf-4a73197f02")
+}, 
+results_wfid = "wf-3c1660f432",
+memory_request = "25Gi")
 # wf-f0959d74d1
 # wf-921cf942af
+# wf-7f81e4e7a2
+# wf-7bfb6831ed
 
-Results = readRDS(get_workflow_outputs("wf-921cf942af"))
+Results = readRDS(get_workflow_outputs("wf-7bfb6831ed"))
 Results = list(DZEnrichment = Results[[1]],
                Target_Cell = Results[[2]][which(Results[[2]]$DataType == "Target_Cell"),],
                Target_Gene = Results[[2]][which(Results[[2]]$DataType == "Target_Gene"),],
@@ -176,8 +178,26 @@ Results = list(DZEnrichment = Results[[1]],
                Target_CS = Results[[3]][which(Results[[3]]$DataType == "Target_CS"),],
                Target_Cell_PCA = Results[[3]][which(Results[[3]]$DataType == "Target_Cell_PCA"),],
                Target_Pathway_PCA = Results[[3]][which(Results[[3]]$DataType == "Target_Pathway_PCA"),])
+
+# fixing the criteria collection for our signatures
+Results$Target_Pathway$Criteria.Collection = sapply(Results$Target_Pathway$Criteria.Identifier, function(x) str_split(x,":",simplify = TRUE)[,1])
+idx = which(Results$Target_Pathway$Criteria.Collection %in% c("X2","negativeControls"))
+identifier = Results$Target_Pathway$Criteria.Identifier[idx]
+identifier = sapply(identifier, function(x) str_split(x,":",simplify = TRUE)[,2])
+collection = collectionMapping$collection[match(identifier, collectionMapping$signature)]
+Results$Target_Pathway$Criteria.Collection[idx] = collection
+
+# Flippping direction of PC2
+idx = which(Results$Target_Pathway_PCA$Type == "bulk" & Results$Target_Pathway_PCA$Criteria.Identifier == "pathway_meta_pc2")
+Results$Target_Pathway_PCA$metricValue[idx]  = (-1) * Results$Target_Pathway_PCA$metricValue[idx]
+idx = which(Results$Target_Cell_PCA$Type == "bulk" & Results$Target_Cell_PCA$Criteria.Identifier == "cell_meta_pc2")
+Results$Target_Cell_PCA$metricValue[idx]  = (-1) * Results$Target_Cell_PCA$metricValue[idx]
+
 pushToCC(Results, tagsToPass = list(list(name="object",value="processed_results")))
 # wf-798227871e
+# wf-91e85b6c8e
+# wf-6f20463d54
+# wf-ba85ebeacf
 
 uploadToBQ(Results$DZEnrichment, bqdataset = "s05_atopic_dermatitis", tableName = "Results_DZEnrichment")
 uploadToBQ(Results$Target_Cell, bqdataset = "s05_atopic_dermatitis", tableName = "Results_Target_Cell")
