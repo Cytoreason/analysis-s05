@@ -8,7 +8,7 @@ library(reshape2)
 
 ## Prep network
 ## ==================
-signatureMapping = readRDS(get_workflow_outputs("wf-236f2ebd65"))
+signatureMapping = readRDS(get_workflow_outputs("wf-b520743a43"))
 
 # signatures
 signatures <- readRDS(get_workflow_outputs("wf-b1950a97bd"))
@@ -296,14 +296,122 @@ uploadToBQ(topology, bqdataset = "s05_atopic_dermatitis", tableName = "Results_N
 ## Visualization
 ## ==========================
 # centrality
-centrality = readRDS(get_workflow_outputs("wf-79da938ff2"))
-centrality = centrality %>%
-  dplyr::filter(Criteria.Identifier == "eigen_centrality_median") %>%
-  dplyr::filter(Target.Collection %in% c("X2","negativeControls","Positives")) %>%
-  dplyr::filter(!str_detect(Target.Identifier,"cov|activation|Icatibant|PAMP|activated|x2_general_inhibition_late|insilico"))
-centrality$Target.Name = signatureMapping$New_identifier[match(centrality$Target.ID, signatureMapping$ID)]
-centrality$PreviousName = signatureMapping$
+# -------------------
+centrality_randoms = rbind(cbind(readRDS(get_workflow_outputs("wf-eced63000b"))[["FullParam"]], Type = "adjusted"),
+                           cbind(readRDS(get_workflow_outputs("wf-bf70438e87"))[["FullParam"]], Type = "bulk"))
 
-# Add randoms
-centrality_randoms = readRDS(get_workflow_outputs("wf-eced63000b"))[["FullParam"]]
-centrality_randoms = centrality_randoms[which(centrality_randoms$ListName %in% c(centrality$Target.Identifier,"negativeControls."))]
+# Summarize random and shuffled random
+for(id in c("random","top50","bottom50")){
+  idx = which(str_detect(centrality_randoms$ListName,id))
+  if(id != "random") { id = paste0("smoothedRandom_",id)}
+  
+  tmp = centrality_randoms[idx,] %>%
+    group_by(ListType, Type) %>%
+    summarise(across(2:14, .fns = median)) %>%
+    mutate(ListName = paste0("negativeControls:",id)) %>%
+    select(colnames(centrality_randoms))
+  
+  centrality_randoms = centrality_randoms[-idx,]
+  centrality_randoms = rbind(centrality_randoms, tmp)
+  rm(idx, tmp)
+}
+
+centrality_randoms = centrality_randoms[,c("ListType","ListName","Type","eigen_centrality_median")]
+centrality_randoms = centrality_randoms %>%
+  rename(Target.ID = ListName, metricValue = eigen_centrality_median) %>%
+  mutate(Criteria.Identifier = "eigen_centrality_median") %>%
+  mutate(Target.Identifier = case_when(!str_detect(Target.ID,"random|Random") ~ signatureMapping$New_identifier[match(Target.ID, signatureMapping$signature)],
+                                       str_detect(Target.ID,"random|Random") ~ signatureMapping$New_identifier[match(Target.ID, signatureMapping$ID)])) %>%
+  dplyr::filter(Target.Identifier != "") %>%
+  mutate(Target.Collection = signatureMapping$collection[match(Target.Identifier, signatureMapping$New_identifier)]) %>%
+  dplyr::filter(!Target.Collection %in% c("Ligands","Mast","Itch","Neuronal")) %>%
+  dplyr::filter(!str_detect(Target.Identifier, c("insilico|x2_|PAMP|CST|SP|aIgE|Icatibant|X2 late activation|X2 early activated|X2 early activation"))) %>%
+  dplyr::filter(!Target.Identifier == "X2 late inhibition") %>%
+  mutate(Target.ID = signatureMapping$ID[match(Target.Identifier, signatureMapping$New_identifier)])
+
+centrality_randoms$ListType[which(centrality_randoms$ListType != "gene_list")] = "random"
+pushToCC(centrality_randoms, tagsToPass = list(list(name="object",value="centrality")))
+# wf-6fdec24eab
+
+centrality_randoms2 = split(centrality_randoms, centrality_randoms$ListType)
+centrality_randoms2$gene_list$Target = cytoreason.gx::reorder_within(centrality_randoms2$gene_list$Target.Identifier, centrality_randoms2$gene_list$metricValue, centrality_randoms2$gene_list$Type)
+or = levels(centrality_randoms2$gene_list$Target)
+centrality_randoms2$random$Target <- factor(
+  paste0(centrality_randoms2$random$Target.Identifier, "___", centrality_randoms2$random$Type),
+  levels = or
+)
+
+bulk = list(gene_list = centrality_randoms2$gene_list[which(centrality_randoms2$gene_list$Type == "bulk"),],
+            random = centrality_randoms2$random[which(centrality_randoms2$random$Type == "bulk"),])
+
+ggplot(bulk$random, aes(x = metricValue, y = Target)) +
+  geom_point(color = "grey", alpha = 0.3, size = 3) +
+  geom_point(data = bulk$gene_list, inherit.aes = T, aes(color = Target.ID), size=6) +
+  cytoreason.gx::scale_y_reordered()+
+  scale_color_manual(values = targetColors) +
+  scale_x_continuous(transform = squash_axis(0.005,0.04,10))+
+  theme_minimal() +
+  theme(legend.position = "none") +
+  ggpubr::border()+
+  labs(x = "Median Eigen Centrality", y = NULL)
+ggsave("~/analysis-s05/figures/Results/network_eigenCentrality.png", width = 6, height = 6, bg= "white")
+
+
+# topology
+# -------------------
+topology_randoms = readRDS(get_workflow_outputs("wf-43b72160d0"))
+topology_randoms = bind_rows(topology_randoms)
+topology_randoms = topology_randoms[,c("ListType", "ListName", "density")]
+
+# Summarize random and shuffled random
+for(id in c("random","top50","bottom50")){
+  idx = which(str_detect(topology_randoms$ListName,id))
+  if(id != "random") { id = paste0("smoothedRandom_",id)}
+  
+  tmp = topology_randoms[idx,] %>%
+    group_by(ListType) %>%
+    summarise(density = median(density)) %>%
+    mutate(ListName = paste0("negativeControls:",id)) %>%
+    select(colnames(topology_randoms))
+  
+  topology_randoms = topology_randoms[-idx,]
+  topology_randoms = rbind(topology_randoms, tmp)
+  rm(idx, tmp)
+}
+
+topology_randoms = topology_randoms %>%
+  rename(Target.ID = ListName, metricValue = density) %>%
+  mutate(Target.ID = str_replace(Target.ID, "X2.","X2:")) %>%
+  mutate(Criteria.Identifier = "density") %>%
+  mutate(Target.Identifier = signatureMapping$New_identifier[match(Target.ID, signatureMapping$previousID)]) %>%
+  dplyr::filter(Target.Identifier != "") %>%
+  mutate(Target.Collection = signatureMapping$collection[match(Target.Identifier, signatureMapping$New_identifier)]) %>%
+  dplyr::filter(!Target.Collection %in% c("Ligands","Mast","Itch","Neuronal")) %>%
+  dplyr::filter(!str_detect(Target.Identifier, c("insilico|x2_|PAMP|CST|SP|aIgE|Icatibant|X2 late activation|X2 early activated|X2 early activation"))) %>%
+  dplyr::filter(!Target.Identifier == "X2 late inhibition") %>%
+  mutate(Target.ID = signatureMapping$ID[match(Target.Identifier, signatureMapping$New_identifier)]) %>%
+  mutate(Type = "bulk")
+
+topology_randoms$ListType[which(topology_randoms$ListType != "gene_list")] = "random"
+pushToCC(topology_randoms, tagsToPass = list(list(name="object",value="topology")))
+# wf-6bf7b324b4
+
+topology_randoms2 = split(topology_randoms, topology_randoms$ListType)
+topology_randoms2$gene_list$Target = cytoreason.gx::reorder_within(topology_randoms2$gene_list$Target.Identifier, topology_randoms2$gene_list$metricValue, topology_randoms2$gene_list$Type)
+or = levels(topology_randoms2$gene_list$Target)
+topology_randoms2$random$Target <- factor(
+  paste0(topology_randoms2$random$Target.Identifier, "___", topology_randoms2$random$Type),
+  levels = or
+)
+
+ggplot(topology_randoms2$random, aes(x = metricValue, y = Target)) +
+  geom_point(color = "grey", alpha = 0.3, size = 3) +
+  geom_point(data = topology_randoms2$gene_list, inherit.aes = T, aes(color = Target.ID), size=6) +
+  cytoreason.gx::scale_y_reordered()+
+  scale_color_manual(values = targetColors) +
+  # scale_x_continuous(transform = squash_axis(0.005,0.04,10))+
+  theme_minimal() +
+  theme(legend.position = "none") +
+  ggpubr::border()+
+  labs(x = "Density", y = NULL)
+ggsave("~/analysis-s05/figures/Results/network_density.png", width = 6, height = 6, bg= "white")

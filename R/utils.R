@@ -176,4 +176,11 @@ spot.theme <- list(
   theme(axis.line=element_blank()),
   theme(text = element_text(size = 14)),
   theme(plot.margin = unit(c(10,10,10,10), "mm")),
-  scale_size_continuous(range = c(-1, 10)))
+  theme(strip.background.y = element_blank(), strip.text.y = element_blank()),
+  scale_size_continuous(range = c(-1, 10)),
+  geom_point(colour = "black", aes(size = 1.1)),
+  geom_point(colour = "white", aes(size = 1)),
+  xlab(""), ylab(""),
+  guides(color = F),
+  labs(size = "scaled score\nper criteria")
+)

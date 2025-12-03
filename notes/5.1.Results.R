@@ -9,6 +9,18 @@ library(tidyverse)
 
 ccm_wfid = "wf-8e948630d7"
 
+collectionMapping = readRDS(get_workflow_outputs("wf-d3240e7fb6"))
+  collectionMapping$collection[str_detect(collectionMapping$collection, "Negative|negative")] <- "negativeControls"
+  collectionMapping$ID = paste0(collectionMapping$collection,":",collectionMapping$signature)
+  collectionMapping$previousID = paste0("X2:",collectionMapping$signature)
+  collectionMapping$previousID[which(collectionMapping$collection == "negativeControls")] <- paste0("negativeControls:",collectionMapping$signature[which(collectionMapping$collection == "negativeControls")])
+  collectionMapping$previousID[which(collectionMapping$signature %in% c("BMP4","BMP6","BMP7","TGFB2"))] <- paste0("X2:",collectionMapping$signature[which(collectionMapping$signature %in% c("BMP4","BMP6","BMP7","TGFB2"))])
+signatures = readRDS(get_workflow_outputs("wf-890b2caf5c"))
+signatureMapping = merge(collectionMapping, signatures, by.x = "signature", by.y = "Old_identifier", all=T)
+pushToCC(signatureMapping)
+# wf-b520743a43
+
+
 # 2. Extraction
 # ----------------------------
 # We use the L_vs_NL effect to extract results because we need only the information in within lesional samples
@@ -88,15 +100,7 @@ run_function_dist(FUN = function(results_wfid){
 
   results_wfid = get_workflow(results_wfid, wait = T)
   Results = readRDS(get_workflow_outputs(results_wfid))
-  # collectionMapping = readRDS(get_workflow_outputs("wf-d3240e7fb6"))
-  #   collectionMapping$collection[str_detect(collectionMapping$collection, "Negative|negative")] <- "negativeControls"
-  #   collectionMapping$ID = paste0(collectionMapping$collection,":",collectionMapping$signature)
-  #   collectionMapping$previousID = paste0("X2:",collectionMapping$signature)
-  #   collectionMapping$previousID[which(collectionMapping$collection == "negativeControls")] <- paste0("negativeControls:",collectionMapping$signature[which(collectionMapping$collection == "negativeControls")])
-  #   collectionMapping$previousID[which(collectionMapping$signature %in% c("BMP4","BMP6","BMP7","TGFB2"))] <- paste0("X2:",collectionMapping$signature[which(collectionMapping$signature %in% c("BMP4","BMP6","BMP7","TGFB2"))])
-  # signatures = readRDS(get_workflow_outputs("wf-2af9f0a83f"))
-  # signatureMapping = merge(collectionMapping, signatures, by.x = "signature", by.y = "Old_identifier")
-  signatureMapping = readRDS(get_workflow_outputs("wf-236f2ebd65"))
+  signatureMapping = readRDS(get_workflow_outputs("wf-b520743a43"))
   geneCollections = unique(signatureMapping$collection)
   
   processResults = function(data, tableName) {
@@ -185,8 +189,9 @@ memory_request = "25Gi")
 # wf-a30ed87a96
 # wf-c60a87ef45
 # wf-d37ae65109
+# wf-39a889155d
 
-Results = readRDS(get_workflow_outputs("wf-c60a87ef45"))
+Results = readRDS(get_workflow_outputs("wf-39a889155d"))
 Results = list(DZEnrichment = Results[[1]],
                Target_Cell = Results[[2]][which(Results[[2]]$DataType == "Target_Cell"),],
                Target_Gene = Results[[2]][which(Results[[2]]$DataType == "Target_Gene"),],
@@ -202,10 +207,12 @@ Results$Target_Pathway_PCA$metricValue[idx]  = (-1) * Results$Target_Pathway_PCA
 idx = which(Results$Target_Cell_PCA$Type == "bulk" & Results$Target_Cell_PCA$Criteria.Identifier == "cell_meta_pc2")
 Results$Target_Cell_PCA$metricValue[idx]  = (-1) * Results$Target_Cell_PCA$metricValue[idx]
 
-# Changing criteria collection for X2 signatures
+# Changing *criteria* collection for X2 signatures
 idx = which(Results$Target_Pathway$Criteria.Collection == "X2")
-Results$Target_Pathway$Criteria.Collection[idx] = collectionMapping$collection[match(Results$Target_Pathway$Criteria.Identifier[idx], collectionMapping$previousID)]
-Results$Target_Pathway$Criteria.Identifier[idx] = collectionMapping$ID[match(Results$Target_Pathway$Criteria.Identifier[idx], collectionMapping$previousID)]
+Results$Target_Pathway$Criteria.Collection[idx] = signatureMapping$collection[match(Results$Target_Pathway$Criteria.Identifier[idx], signatureMapping$previousID)]
+Results$Target_Pathway$Criteria.Identifier[idx] = signatureMapping$ID[match(Results$Target_Pathway$Criteria.Identifier[idx], signatureMapping$previousID)]
+idx = which(Results$Target_Pathway$Criteria.Collection == "negativeControls")
+Results$Target_Pathway = Results$Target_Pathway[-idx,]
 
 pushToCC(Results, tagsToPass = list(list(name="object",value="processed_results")))
 # wf-798227871e
@@ -214,6 +221,8 @@ pushToCC(Results, tagsToPass = list(list(name="object",value="processed_results"
 # wf-ba85ebeacf
 # wf-a53211cea7
 # wf-cd3c366c62
+# wf-1bea2eb00f
+# wf-9a4e8e1dba
 
 uploadToBQ(Results$DZEnrichment, bqdataset = "s05_atopic_dermatitis", tableName = "Results_DZEnrichment")
 uploadToBQ(Results$Target_Cell, bqdataset = "s05_atopic_dermatitis", tableName = "Results_Target_Cell")
@@ -223,3 +232,12 @@ uploadToBQ(Results$Target_MS, bqdataset = "s05_atopic_dermatitis", tableName = "
 uploadToBQ(Results$Target_CS, bqdataset = "s05_atopic_dermatitis", tableName = "Results_Target_CS")
 uploadToBQ(Results$Target_Cell_PCA, bqdataset = "s05_atopic_dermatitis", tableName = "Results_Cell_PCA")
 uploadToBQ(Results$Target_Pathway_PCA, bqdataset = "s05_atopic_dermatitis", tableName = "Results_Pathway_PCA")
+
+
+## Add correlations between cells and pathways
+Results = readRDS(get_workflow_outputs("wf-3c1660f432"))
+featureCorr=Results$TargetFeatures
+featureCorr = featureCorr %>%
+  # dplyr::filter(!collection %in% c("negativeControls","X2")) %>%
+  dplyr::filter(!str_detect(feature_id_2, "X2:|negativeControls:"))
+  

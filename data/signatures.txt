@@ -1,8 +1,8 @@
 Target_Collection	Old_identifier	New_identifier
 In vitro Mast cells experiment	aIgE_activation_late_50	aIgE late activation
 In vitro Mast cells experiment	aIgE_activation_late_50_archs_refined	aIgE late activation refined
-In vitro Mast cells experiment	CST14_activation_early_50	CST14 erly activation
-In vitro Mast cells experiment	CST14_activation_early_50_archs_refined	CST14 erly activation refined
+In vitro Mast cells experiment	CST14_activation_early_50	CST14 early activation
+In vitro Mast cells experiment	CST14_activation_early_50_archs_refined	CST14 early activation refined
 In vitro Mast cells experiment	Icatibant_activation_early_50	Icatibant early activation
 In vitro Mast cells experiment	Icatibant_activation_early_50_archs_refined	Icatibant early activation refined
 In vitro Mast cells experiment	PAMP12_activation_early_50	PAMP12 early activation
@@ -19,11 +19,11 @@ In vitro Mast cells experiment	x2_activated_inhibition_late_50	x2_activated_inhi
 In vitro Mast cells experiment	x2_activated_inhibition_late_50_archs_refined	x2_activated_inhibition_late_50_archs_refined
 In vitro Mast cells experiment	x2_activation_early_50	X2 early activation
 In vitro Mast cells experiment	x2_activation_early_50_archs_refined	X2 early activation refined
-In vitro Mast cells experiment	x2_activation_late_50	x2_activation_late_51
+In vitro Mast cells experiment	x2_activation_late_50	x2_activation_late_50
 In vitro Mast cells experiment	x2_activation_late_50_archs_refined	x2_activation_late_50_archs_refined
 In vitro Mast cells experiment	x2_general_inhibition_early_50	X2 early general inhibition
 In vitro Mast cells experiment	x2_general_inhibition_early_50_archs_refined	X2 early general inhibition refined
-In vitro Mast cells experiment	x2_general_inhibition_late_50	x2_general_inhibition_late_51
+In vitro Mast cells experiment	x2_general_inhibition_late_50	x2_general_inhibition_late_50
 In vitro Mast cells experiment	x2_general_inhibition_late_50_archs_refined	x2_general_inhibition_late_50_archs_refined
 In vitro Mast cells experiment	x2_insilico_50_archs_refined	x2_insilico_50_archs_refined
 In vitro Mast cells experiment	x2cov_activated_inhibition_early_50	
@@ -49,11 +49,11 @@ Ligands	CAMP	CAMP
 Ligands	CHGA	CHGA
 Ligands	CNP	CNP
 Ligands	CORT	CORT
-Ligands	CXCL14	CXCL15
+Ligands	CXCL14	CXCL14
 Ligands	DEFB103B	DEFB103B
 Ligands	EPX	EPX
-Ligands	HSPE1	HSPE2
-Ligands	IGFBP5	IGFBP6
+Ligands	HSPE1	HSPE1
+Ligands	IGFBP5	IGFBP5
 Ligands	NPFF	NPFF
 Ligands	OXT	OXT
 Ligands	PDYN	PDYN
@@ -80,7 +80,7 @@ Neuronal	NGF	NGF
 Neuronal	NO	NO
 Neuronal	NRG1	NRG2
 Neuronal	NTF4	NTF5
-Positive controls	CXCL4	CXCL5
+Positive controls	CXCL4	CXCL4
 Positive controls	IL4	IL4
 Positive controls	IL6	IL6
 Positive controls	IL12	IL12
