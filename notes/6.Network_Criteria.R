@@ -8,7 +8,7 @@ library(reshape2)
 
 ## Prep network
 ## ==================
-collectionMapping = readRDS(get_workflow_outputs("wf-d3240e7fb6"))
+signatureMapping = readRDS(get_workflow_outputs("wf-236f2ebd65"))
 
 # signatures
 signatures <- readRDS(get_workflow_outputs("wf-b1950a97bd"))
@@ -141,7 +141,7 @@ processing <- function(wfid, nIter) {
   
   values <- asset$FullParam
   values <- values[values$ListType %in% "gene_list", ]
-  values_long <- melt(values, id.vars = c("ListType", "ListName"), variable.name = "Criteria")
+  values_long <- reshape2::melt(values, id.vars = c("ListType", "ListName"), variable.name = "Criteria")
   
   merged <- merge(pval, values_long, by = c("ListName", "Criteria"), all.x = TRUE)
   
@@ -178,10 +178,12 @@ for(id in c("random","top50","bottom50")){
   rm(idx, tmp)
 }
 
-centrality$Target.Collection = collectionMapping$collection[match(centrality$Target.Identifier, collectionMapping$signature)]
-centrality$Target.ID[!str_detect(centrality$Target.ID,"negativeControls")] <- paste0("X2:",centrality$Target.ID[!str_detect(centrality$Target.ID,"negativeControls")])
+centrality$Target.Collection = signatureMapping$collection[match(centrality$Target.Identifier, signatureMapping$signature)]
+centrality$Target.ID <- signatureMapping$ID[match(centrality$Target.ID, signatureMapping$signature)]
+centrality$Target.ID[is.na(centrality$Target.ID)] <- signatureMapping$ID[match(centrality$Target.Identifier[is.na(centrality$Target.ID)], signatureMapping$signature)]
 pushToCC(centrality, tagsToPass = list(list(name="object", value="centrality")))
 # wf-9393f0f8dc
+# wf-79da938ff2 - better signature names
 uploadToBQ(centrality, bqdataset = "s05_atopic_dermatitis", tableName = "Results_Network")
 
 
@@ -280,7 +282,28 @@ for(id in c("random","top50","bottom50")){
   rm(idx, tmp)
 }
 
-topology$Target.Collection = collectionMapping$collection[match(topology$Target.Identifier, collectionMapping$signature)]
+topology$Target.Collection = signatureMapping$collection[match(topology$Target.Identifier, signatureMapping$signature)]
+topology$Target.ID = signatureMapping$ID[match(topology$Target.ID, signatureMapping$previousID)]
+topology$Target.ID = signatureMapping$ID[match(topology$Target.ID, signatureMapping$previousID)]
+
 pushToCC(topology, tagsToPass = list(list(name="object", value="topology")))
 # wf-e6682f3eaf
+# wf-15e8917643 - better signature names
 uploadToBQ(topology, bqdataset = "s05_atopic_dermatitis", tableName = "Results_Network", disposition = "WRITE_APPEND")
+
+
+
+## Visualization
+## ==========================
+# centrality
+centrality = readRDS(get_workflow_outputs("wf-79da938ff2"))
+centrality = centrality %>%
+  dplyr::filter(Criteria.Identifier == "eigen_centrality_median") %>%
+  dplyr::filter(Target.Collection %in% c("X2","negativeControls","Positives")) %>%
+  dplyr::filter(!str_detect(Target.Identifier,"cov|activation|Icatibant|PAMP|activated|x2_general_inhibition_late|insilico"))
+centrality$Target.Name = signatureMapping$New_identifier[match(centrality$Target.ID, signatureMapping$ID)]
+centrality$PreviousName = signatureMapping$
+
+# Add randoms
+centrality_randoms = readRDS(get_workflow_outputs("wf-eced63000b"))[["FullParam"]]
+centrality_randoms = centrality_randoms[which(centrality_randoms$ListName %in% c(centrality$Target.Identifier,"negativeControls."))]

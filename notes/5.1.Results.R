@@ -88,17 +88,24 @@ run_function_dist(FUN = function(results_wfid){
 
   results_wfid = get_workflow(results_wfid, wait = T)
   Results = readRDS(get_workflow_outputs(results_wfid))
-  targetMapping = readRDS(get_workflow_outputs("wf-6c4b539629")) # taken from "2.7.Final_Signatures.R"
-  geneCollections = unique(targetMapping$Target.Collection)
-  collectionMapping = readRDS(get_workflow_outputs("wf-d3240e7fb6"))
-
-
+  # collectionMapping = readRDS(get_workflow_outputs("wf-d3240e7fb6"))
+  #   collectionMapping$collection[str_detect(collectionMapping$collection, "Negative|negative")] <- "negativeControls"
+  #   collectionMapping$ID = paste0(collectionMapping$collection,":",collectionMapping$signature)
+  #   collectionMapping$previousID = paste0("X2:",collectionMapping$signature)
+  #   collectionMapping$previousID[which(collectionMapping$collection == "negativeControls")] <- paste0("negativeControls:",collectionMapping$signature[which(collectionMapping$collection == "negativeControls")])
+  #   collectionMapping$previousID[which(collectionMapping$signature %in% c("BMP4","BMP6","BMP7","TGFB2"))] <- paste0("X2:",collectionMapping$signature[which(collectionMapping$signature %in% c("BMP4","BMP6","BMP7","TGFB2"))])
+  # signatures = readRDS(get_workflow_outputs("wf-2af9f0a83f"))
+  # signatureMapping = merge(collectionMapping, signatures, by.x = "signature", by.y = "Old_identifier")
+  signatureMapping = readRDS(get_workflow_outputs("wf-236f2ebd65"))
+  geneCollections = unique(signatureMapping$collection)
+  
   processResults = function(data, tableName) {
     if(tableName == "DZEnrichment") {
       targetID = "pathway"
       criteriaID = "term"
       colnames(data)[which(colnames(data) == "nes")] <- "value"
       data$DataType = paste0("Enrichment in ",data$term)
+      data$collection = signatureMapping$collection[match(data$pathway, signatureMapping$signature)]
       data$pathway = paste0(data$collection, ":",data$pathway)
       terms = c("L_vs_NL","L_vs_HC","NL_vs_HC","AD","DZ_vs_HC")
     } else if(tableName == "TargetFeatures") {
@@ -106,13 +113,16 @@ run_function_dist(FUN = function(results_wfid){
       criteriaID = "feature_id_1"
       data$feature_type1 = str_replace(data$feature_type1, "gene_set", "pathway")
       data$DataType = paste0("Target_", str_to_title(data$feature_type1))
-      data$collection = str_split(data$feature_id_2,":",simplify = TRUE)[,1]
+      data$feature_id_2 = signatureMapping$ID[match(data$feature_id_2, signatureMapping$previousID)]
+      data$collection = signatureMapping$collection[match(data$feature_id_2, signatureMapping$ID)]
       data$hit = NA
       terms = "L"
     } else {
       targetID = "feature_id_1"
       criteriaID = "feature_id_2"
-      mapping = c("EASI" = "CS", "SCOARD" = "CS", "MolecularScore" = "MS",
+      data = data[which(data$collection %in% geneCollections),]
+      data$feature_id_1 = signatureMapping$ID[match(data$feature_id_1, signatureMapping$previousID)]
+      mapping = c("EASI" = "CS", "SCORAD" = "CS", "MolecularScore" = "MS",
                   "cell_meta_pc1" = "Cell_PCA", "cell_meta_pc2" = "Cell_PCA", "cell_meta_pc3" = "Cell_PCA",
                   "pathway_meta_pc1" = "Pathway_PCA", "pathway_meta_pc2" = "Pathway_PCA", "pathway_meta_pc3" = "Pathway_PCA",
                   "adj_pathway_meta_pc1" = "Pathway_PCA", "adj_pathway_meta_pc2" = "Pathway_PCA", "adj_pathway_meta_pc3" = "Pathway_PCA")
@@ -128,7 +138,6 @@ run_function_dist(FUN = function(results_wfid){
       mutate(Target.ID = Target.Identifier) %>%
       mutate(Target.Identifier = str_split(Target.Identifier,":",simplify = TRUE)[,2]) %>%
       dplyr::rename(Target.Collection = collection) %>%
-      dplyr::filter(Target.Collection %in% geneCollections) %>%
       mutate(Criteria.Identifier = get(criteriaID)) %>%
       mutate(Criteria.Collection = str_split(Criteria.Identifier,":",simplify = TRUE)[,1]) %>%
       mutate(log10_fdr = -log10(fdr)) %>%
@@ -153,12 +162,17 @@ run_function_dist(FUN = function(results_wfid){
       newtable = rbind(newtable, tmp)
       rm(idx, tmp)
     }
+    
+    # mapping targets to new collections
+    newtable$Target.Collection = signatureMapping$collection[match(newtable$Target.Identifier, signatureMapping$signature)]
 
-    newtable$Target.Collection = collectionMapping$collection[match(newtable$Target.Identifier, collectionMapping$signature)]
+    # renaming target signatures and removing unwanted ones
+    newtable$Target.Identifier = signatureMapping$New_identifier[match(newtable$Target.Identifier, signatureMapping$signature)]
+    newtable = newtable[-which(newtable$Target.Identifier == ""),]
     
     return(newtable)
   }
-
+  
   Results = lapply(names(Results), function(dataName) processResults(data = Results[[dataName]], tableName = dataName))
   return(Results)
 }, 
@@ -168,8 +182,11 @@ memory_request = "25Gi")
 # wf-921cf942af
 # wf-7f81e4e7a2
 # wf-7bfb6831ed
+# wf-a30ed87a96
+# wf-c60a87ef45
+# wf-d37ae65109
 
-Results = readRDS(get_workflow_outputs("wf-7bfb6831ed"))
+Results = readRDS(get_workflow_outputs("wf-c60a87ef45"))
 Results = list(DZEnrichment = Results[[1]],
                Target_Cell = Results[[2]][which(Results[[2]]$DataType == "Target_Cell"),],
                Target_Gene = Results[[2]][which(Results[[2]]$DataType == "Target_Gene"),],
@@ -179,25 +196,24 @@ Results = list(DZEnrichment = Results[[1]],
                Target_Cell_PCA = Results[[3]][which(Results[[3]]$DataType == "Target_Cell_PCA"),],
                Target_Pathway_PCA = Results[[3]][which(Results[[3]]$DataType == "Target_Pathway_PCA"),])
 
-# fixing the criteria collection for our signatures
-Results$Target_Pathway$Criteria.Collection = sapply(Results$Target_Pathway$Criteria.Identifier, function(x) str_split(x,":",simplify = TRUE)[,1])
-idx = which(Results$Target_Pathway$Criteria.Collection %in% c("X2","negativeControls"))
-identifier = Results$Target_Pathway$Criteria.Identifier[idx]
-identifier = sapply(identifier, function(x) str_split(x,":",simplify = TRUE)[,2])
-collection = collectionMapping$collection[match(identifier, collectionMapping$signature)]
-Results$Target_Pathway$Criteria.Collection[idx] = collection
-
-# Flippping direction of PC2
+# Flipping direction of PC2
 idx = which(Results$Target_Pathway_PCA$Type == "bulk" & Results$Target_Pathway_PCA$Criteria.Identifier == "pathway_meta_pc2")
 Results$Target_Pathway_PCA$metricValue[idx]  = (-1) * Results$Target_Pathway_PCA$metricValue[idx]
 idx = which(Results$Target_Cell_PCA$Type == "bulk" & Results$Target_Cell_PCA$Criteria.Identifier == "cell_meta_pc2")
 Results$Target_Cell_PCA$metricValue[idx]  = (-1) * Results$Target_Cell_PCA$metricValue[idx]
+
+# Changing criteria collection for X2 signatures
+idx = which(Results$Target_Pathway$Criteria.Collection == "X2")
+Results$Target_Pathway$Criteria.Collection[idx] = collectionMapping$collection[match(Results$Target_Pathway$Criteria.Identifier[idx], collectionMapping$previousID)]
+Results$Target_Pathway$Criteria.Identifier[idx] = collectionMapping$ID[match(Results$Target_Pathway$Criteria.Identifier[idx], collectionMapping$previousID)]
 
 pushToCC(Results, tagsToPass = list(list(name="object",value="processed_results")))
 # wf-798227871e
 # wf-91e85b6c8e
 # wf-6f20463d54
 # wf-ba85ebeacf
+# wf-a53211cea7
+# wf-cd3c366c62
 
 uploadToBQ(Results$DZEnrichment, bqdataset = "s05_atopic_dermatitis", tableName = "Results_DZEnrichment")
 uploadToBQ(Results$Target_Cell, bqdataset = "s05_atopic_dermatitis", tableName = "Results_Target_Cell")

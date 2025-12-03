@@ -205,27 +205,14 @@ ggplot(keyPathways_sum, aes(x = importance, y = nPathways, fill = level0, group 
 ggsave("~/analysis-s05/figures/AD Model/keyPathways_betweenBulkAndAdjusted.png", scale = 1, width = 8, height = 5, bg = "white")
 
 
-## Cell Loadings
-## =========================
-ccm = as_ccm_fit("wf-08a6a0a503")
-cellPCA = ccm$multi$meta_pca
-cellLoadings = cellPCA$`1`$v
-cellLoadings[,2] = (-1) * cellLoadings[,2]
-cellLoadings = reshape2::melt(cellLoadings, variable.name = "PC", value.name = "loading")
-colnames(cellLoadings) = c("Cell","PC","Loading")
-cellLoadings$PC = paste0("PC",cellLoadings$PC)
-
-uploadToBQ(cellLoadings, bqdataset = "s05_atopic_dermatitis", tableName = "cellLoadings") # only in bulk
-
-
-## Visualizations - sample level
-## ====================================
+## Visualizations - pathways - sample level
+## ===============================================
 unified_metadata = readRDS(get_workflow_outputs("wf-e82a5ab3b6"))
 unified_metadata$sample_classification[which(unified_metadata$sample_classification == "Normal")] <- "HC"
 pathways_bulk = readRDS(get_workflow_outputs("wf-31ea889fa9"))
 pathways_adj = readRDS(get_workflow_outputs("wf-72065e3e29"))
   colnames(pathways_adj)[3:5] = paste0("adj_",colnames(pathways_adj)[3:5])
-cells_bulk = lapply(cellPCA$`1`$x, function(x) x[["coord"]][,1:3]) %>% do.call(rbind,.)
+# cells_bulk = lapply(cellPCA$`1`$x, function(x) x[["coord"]][,1:3]) %>% do.call(rbind,.)
 
 unified_metadata = merge(unified_metadata, pathways_bulk, by = "sample_id")
 unified_metadata = merge(unified_metadata, pathways_adj, by = "sample_id")
@@ -233,18 +220,23 @@ unified_metadata = merge(unified_metadata, pathways_adj, by = "sample_id")
 uploadToBQ(unified_metadata, bqdataset = "s05_atopic_dermatitis", tableName = "AD_sample_metadata")
 
 # bulk
-pathways = unified_metadata[,c("sample_id","sample_classification","condition","pathway_meta_pc1", "pathway_meta_pc2", "pathway_meta_pc3")]
-pathways = reshape2::melt(pathways, id.vars = 1:3, variable.name = "PC", value.name = "score")
+pathways = unified_metadata[,c("sample_id","sample_classification","condition","pathway_meta_pc1", "pathway_meta_pc2")]
+colnames(pathways)[4:5] = paste0("Pathway Meta PC",1:2)
+pathways$`Pathway Meta PC2` = (-1) * pathways$`Pathway Meta PC2`
 
-ggplot(pathways, aes(y = score, x = sample_classification, fill = sample_classification)) +
-  geom_violin(draw_quantiles = T) +
+pathways = reshape2::melt(pathways, id.vars = 1:3, variable.name = "PC", value.name = "score")
+pathways$sample_classification = factor(pathways$sample_classification, ordered = T, levels = c("Lesion","Non Lesion","HC"))
+
+ggplot(pathways[which(pathways$condition %in% c("AD","HC")),], 
+       aes(y = score, x = sample_classification, fill = sample_classification)) +
+  geom_boxplot(outliers = T) +
   ggpubr::stat_compare_means(method = "wilcox", comparisons = list(c("Lesion","Non Lesion"),c("Non Lesion","HC"),c("Lesion","HC")), paired = F) +
   scale_fill_manual(values = c("#473472","#53629E","#87BAC3"))+
   theme_minimal()+
   facet_wrap(~PC, nrow = 1) +
-  theme(legend.position = "none")+
-  labs(x = NULL, title = "Pathway meta PCA scores")
-ggsave("~/analysis-s05/figures/AD Model/pathwayPCs_bulk_sampleClassification.png", bg = "white", scale=1.5)
+  theme(legend.position = "none", panel.spacing.x = unit(2, "cm"))+
+  labs(x = NULL, title = "Pathway meta PCA scores", y = "Sample Score on the PC")
+ggsave("~/analysis-s05/figures/AD Model/pathwayPCs_bulk_sampleClassification.png", bg = "white", scale=1, width = 8, height = 5, units = "in")
 
 ggplot(pathways, aes(y = score, x = condition, fill = condition)) +
   geom_violin(draw_quantiles = T) +
@@ -257,22 +249,24 @@ ggplot(pathways, aes(y = score, x = condition, fill = condition)) +
   scale_fill_manual(values = c("#473472","#53629E","#87BAC3","#D6F4ED"))+
   facet_wrap(~PC, nrow = 1) +
   theme_minimal()+
-  labs(x = NULL, title = "Pathway meta PCA scores") +
+  labs(x = NULL, title = "Pathway meta PCA scores", y = "Sample Score on the PC") +
   theme(legend.position = "none")
 ggsave("~/analysis-s05/figures/AD Model/pathwayPCs_bulk_condition.png", bg = "white", scale = 1.5)
 
 # adjusted
 pathways = unified_metadata[,c("sample_id","sample_classification","condition","adj_pathway_meta_pc1", "adj_pathway_meta_pc2", "adj_pathway_meta_pc3")]
+colnames(pathways)[4:6] = paste0("Adjusted Pathway Meta PC",1:3)
 pathways = reshape2::melt(pathways, id.vars = 1:3, variable.name = "PC", value.name = "score")
+pathways$sample_classification = factor(pathways$sample_classification, ordered = T, levels = c("Lesion","Non Lesion","HC"))
 
-ggplot(pathways, aes(y = score, x = sample_classification, fill = sample_classification)) +
-  geom_violin(draw_quantiles = T) +
+ggplot(pathways[which(pathways$condition %in% c("AD","HC")),], aes(y = score, x = sample_classification, fill = sample_classification)) +
+  geom_boxplot(outliers = T) +
   ggpubr::stat_compare_means(method = "wilcox", comparisons = list(c("Lesion","Non Lesion"),c("Non Lesion","HC"),c("Lesion","HC")), paired = F) +
   scale_fill_manual(values = c("#473472","#53629E","#87BAC3"))+
   theme_minimal()+
   facet_wrap(~PC, nrow = 1) +
   theme(legend.position = "none")+
-  labs(x = NULL, title = "Pathway meta PCA scores")
+  labs(x = NULL, title = "Pathway meta PCA scores", y = "Sample Score on the PC")
 ggsave("~/analysis-s05/figures/AD Model/pathwayPCs_adj_sampleClassification.png", bg = "white", scale=1.5)
 
 ggplot(pathways, aes(y = score, x = condition, fill = condition)) +
@@ -286,6 +280,51 @@ ggplot(pathways, aes(y = score, x = condition, fill = condition)) +
   scale_fill_manual(values = c("#473472","#53629E","#87BAC3","#D6F4ED"))+
   facet_wrap(~PC, nrow = 1) +
   theme_minimal()+
-  labs(x = NULL, title = "Pathway meta PCA scores") +
+  labs(x = NULL, title = "Pathway meta PCA scores", y = "Sample Score on the PC") +
   theme(legend.position = "none")
 ggsave("~/analysis-s05/figures/AD Model/pathwayPCs_adj_condition.png", bg = "white", scale = 1.5)
+
+
+
+## Cell Loadings
+## =========================
+ccm = as_ccm_fit("wf-08a6a0a503")
+cellPCA = ccm$multi$meta_pca
+cellLoadings = cellPCA$`1`$v
+cellLoadings[,2] = (-1) * cellLoadings[,2]
+cellLoadings = reshape2::melt(cellLoadings, variable.name = "PC", value.name = "loading")
+colnames(cellLoadings) = c("Cell","PC","Loading")
+cellLoadings$PC = paste0("PC",cellLoadings$PC)
+
+uploadToBQ(cellLoadings, bqdataset = "s05_atopic_dermatitis", tableName = "cellLoadings") # only in bulk
+
+
+## Visualizations - cells - sample level
+## ===============================================
+cells = lapply(ccm$datasets, function(d){
+  p = pData(assayDataExpression(d))
+  return(p[,c("sample_id","meta1_pc1","meta1_pc2","meta1_pc3")])
+})
+cells = bind_rows(cells)
+colnames(cells)[-1] = paste0("Cell Meta PC",1:3)
+cells$`Cell Meta PC1` = (-1) * cells$`Cell Meta PC1`
+cells$`Cell Meta PC2` = (-1) * cells$`Cell Meta PC2`
+
+unified_metadata = readRDS(get_workflow_outputs("wf-e82a5ab3b6"))
+unified_metadata$sample_classification[which(unified_metadata$sample_classification == "Normal")] <- "HC"
+unified_metadata = merge(unified_metadata, cells, by = "sample_id")
+
+cells = unified_metadata[,c("sample_id","sample_classification","condition","Cell Meta PC1", "Cell Meta PC2")]
+cells = reshape2::melt(cells, id.vars = 1:3, variable.name = "PC", value.name = "score")
+cells$sample_classification = factor(cells$sample_classification, ordered = T, levels = c("Lesion","Non Lesion","HC"))
+
+ggplot(cells[which(cells$condition %in% c("AD","HC")),], 
+       aes(y = score, x = sample_classification, fill = sample_classification)) +
+  geom_boxplot(outliers = T) +
+  ggpubr::stat_compare_means(method = "wilcox", comparisons = list(c("Lesion","Non Lesion"),c("Non Lesion","HC"),c("Lesion","HC")), paired = F) +
+  scale_fill_manual(values = c("#473472","#53629E","#87BAC3"))+
+  theme_minimal()+
+  facet_wrap(~PC, nrow = 1) +
+  theme(legend.position = "none", panel.spacing.x = unit(2, "cm"))+
+  labs(x = NULL, title = "Cell meta PCA scores", y = "Sample Score on the PC")
+ggsave("~/analysis-s05/figures/AD Model/cellPCs_sampleClassification.png", bg = "white", scale=1, width = 8, height = 5, units = "in")

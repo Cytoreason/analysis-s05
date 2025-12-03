@@ -168,5 +168,3 @@ collectionMapping = rbind(collectionMapping, data.frame(signature = c("smoothedR
 pushToCC(collectionMapping)
 # wf-d3240e7fb6
 
-
-collectionMapping = readRDS(get_workflow_outputs("wf-6b6125369c"))

@@ -1,0 +1,95 @@
+Target_Collection	Old_identifier	New_identifier
+In vitro Mast cells experiment	aIgE_activation_late_50	aIgE late activation
+In vitro Mast cells experiment	aIgE_activation_late_50_archs_refined	aIgE late activation refined
+In vitro Mast cells experiment	CST14_activation_early_50	CST14 erly activation
+In vitro Mast cells experiment	CST14_activation_early_50_archs_refined	CST14 erly activation refined
+In vitro Mast cells experiment	Icatibant_activation_early_50	Icatibant early activation
+In vitro Mast cells experiment	Icatibant_activation_early_50_archs_refined	Icatibant early activation refined
+In vitro Mast cells experiment	PAMP12_activation_early_50	PAMP12 early activation
+In vitro Mast cells experiment	PAMP12_activation_early_50_archs_refined	PAMP12 early activation refined
+In vitro Mast cells experiment	SP_activation_early_50	SP early activation
+In vitro Mast cells experiment	SP_activation_early_50_archs_refined	SP early activation refined
+In vitro Mast cells experiment	SP_activation_late_50	X2 late activation
+In vitro Mast cells experiment	SP_activation_late_50_archs_refined	X2 late activation refined
+In vitro Mast cells experiment	SP_general_inhibition_late_50	X2 late inhibition
+In vitro Mast cells experiment	SP_general_inhibition_late_50_archs_refined	X2 late inhibition refined
+In vitro Mast cells experiment	x2_activated_inhibition_early_50	X2 early activated inhibition
+In vitro Mast cells experiment	x2_activated_inhibition_early_50_archs_refined	X2 early activated inhibition refined
+In vitro Mast cells experiment	x2_activated_inhibition_late_50	x2_activated_inhibition_late_50
+In vitro Mast cells experiment	x2_activated_inhibition_late_50_archs_refined	x2_activated_inhibition_late_50_archs_refined
+In vitro Mast cells experiment	x2_activation_early_50	X2 early activation
+In vitro Mast cells experiment	x2_activation_early_50_archs_refined	X2 early activation refined
+In vitro Mast cells experiment	x2_activation_late_50	x2_activation_late_51
+In vitro Mast cells experiment	x2_activation_late_50_archs_refined	x2_activation_late_50_archs_refined
+In vitro Mast cells experiment	x2_general_inhibition_early_50	X2 early general inhibition
+In vitro Mast cells experiment	x2_general_inhibition_early_50_archs_refined	X2 early general inhibition refined
+In vitro Mast cells experiment	x2_general_inhibition_late_50	x2_general_inhibition_late_51
+In vitro Mast cells experiment	x2_general_inhibition_late_50_archs_refined	x2_general_inhibition_late_50_archs_refined
+In vitro Mast cells experiment	x2_insilico_50_archs_refined	x2_insilico_50_archs_refined
+In vitro Mast cells experiment	x2cov_activated_inhibition_early_50	
+In vitro Mast cells experiment	x2cov_activated_inhibition_early_50_archs_refined	
+In vitro Mast cells experiment	x2cov_activated_inhibition_late_50	
+In vitro Mast cells experiment	x2cov_activated_inhibition_late_50_archs_refined	
+In vitro Mast cells experiment	x2cov_activation_early_50	
+In vitro Mast cells experiment	x2cov_activation_early_50_archs_refined	
+In vitro Mast cells experiment	x2cov_activation_late_50	
+In vitro Mast cells experiment	x2cov_activation_late_50_archs_refined	
+In vitro Mast cells experiment	x2cov_general_inhibition_early_50	
+In vitro Mast cells experiment	x2cov_general_inhibition_early_50_archs_refined	
+In vitro Mast cells experiment	x2cov_general_inhibition_late_50	
+In vitro Mast cells experiment	x2cov_general_inhibition_late_50_archs_refined	
+Itch	Jha	Jha
+Itch	Nattkemper	Nattkemper
+Ligands	ADCYAP1	ADCYAP2
+Ligands	ADM	ADM
+Ligands	ALB	ALB
+Ligands	all_ligands	all_ligands
+Ligands	AVP	AVP
+Ligands	CAMP	CAMP
+Ligands	CHGA	CHGA
+Ligands	CNP	CNP
+Ligands	CORT	CORT
+Ligands	CXCL14	CXCL15
+Ligands	DEFB103B	DEFB103B
+Ligands	EPX	EPX
+Ligands	HSPE1	HSPE2
+Ligands	IGFBP5	IGFBP6
+Ligands	NPFF	NPFF
+Ligands	OXT	OXT
+Ligands	PDYN	PDYN
+Ligands	PF4	PF5
+Ligands	PRG2	PRG3
+Ligands	RNASE3	RNASE4
+Ligands	SST	SST
+Ligands	TAC1	TAC1
+Ligands	TAC4	TAC4
+Ligands	TPM1	TPM2
+Ligands	VIP	VIP
+Mast	mast_at	mast_at
+Mast	mast_crs	mast_crs
+Mast	mast_tryptase	mast_tryptase
+Negative Controls	BMP4	BMP4
+Negative Controls	BMP6	BMP6
+Negative Controls	BMP7	BMP7
+Negative Controls	random	random
+Negative Controls	smoothedRandom_bottom50	smoothedRandom_bottom50
+Negative Controls	smoothedRandom_top50	smoothedRandom_top50
+Negative Controls	TGFB2	TGFB3
+Neuronal	BDNF	BDNF
+Neuronal	NGF	NGF
+Neuronal	NO	NO
+Neuronal	NRG1	NRG2
+Neuronal	NTF4	NTF5
+Positive controls	CXCL4	CXCL5
+Positive controls	IL4	IL4
+Positive controls	IL6	IL6
+Positive controls	IL12	IL12
+Positive controls	IL13	IL13
+Positive controls	IL17	IL17
+Positive controls	IL22	IL22
+Positive controls	IL23	IL23
+Positive controls	IL31	IL31
+Positive controls	IL33	IL33
+Positive controls	IL36	IL36
+Positive controls	TNFA	TNFA
+Positive controls	TSLP	TSLP
