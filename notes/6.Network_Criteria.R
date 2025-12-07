@@ -8,7 +8,7 @@ library(reshape2)
 
 ## Prep network
 ## ==================
-signatureMapping = readRDS(get_workflow_outputs("wf-b520743a43"))
+signatureMapping = readRDS(get_workflow_outputs("wf-fcb1ef2bbd"))
 
 # signatures
 signatures <- readRDS(get_workflow_outputs("wf-b1950a97bd"))
@@ -184,6 +184,7 @@ centrality$Target.ID[is.na(centrality$Target.ID)] <- signatureMapping$ID[match(c
 pushToCC(centrality, tagsToPass = list(list(name="object", value="centrality")))
 # wf-9393f0f8dc
 # wf-79da938ff2 - better signature names
+# wf-72d490c885 - even better
 uploadToBQ(centrality, bqdataset = "s05_atopic_dermatitis", tableName = "Results_Network")
 
 
@@ -284,11 +285,11 @@ for(id in c("random","top50","bottom50")){
 
 topology$Target.Collection = signatureMapping$collection[match(topology$Target.Identifier, signatureMapping$signature)]
 topology$Target.ID = signatureMapping$ID[match(topology$Target.ID, signatureMapping$previousID)]
-topology$Target.ID = signatureMapping$ID[match(topology$Target.ID, signatureMapping$previousID)]
 
 pushToCC(topology, tagsToPass = list(list(name="object", value="topology")))
 # wf-e6682f3eaf
 # wf-15e8917643 - better signature names
+# wf-8556686d74 - even better
 uploadToBQ(topology, bqdataset = "s05_atopic_dermatitis", tableName = "Results_Network", disposition = "WRITE_APPEND")
 
 
@@ -331,7 +332,7 @@ centrality_randoms = centrality_randoms %>%
 
 centrality_randoms$ListType[which(centrality_randoms$ListType != "gene_list")] = "random"
 pushToCC(centrality_randoms, tagsToPass = list(list(name="object",value="centrality")))
-# wf-6fdec24eab
+# wf-eca695022d
 
 centrality_randoms2 = split(centrality_randoms, centrality_randoms$ListType)
 centrality_randoms2$gene_list$Target = cytoreason.gx::reorder_within(centrality_randoms2$gene_list$Target.Identifier, centrality_randoms2$gene_list$metricValue, centrality_randoms2$gene_list$Type)
@@ -394,7 +395,7 @@ topology_randoms = topology_randoms %>%
 
 topology_randoms$ListType[which(topology_randoms$ListType != "gene_list")] = "random"
 pushToCC(topology_randoms, tagsToPass = list(list(name="object",value="topology")))
-# wf-6bf7b324b4
+# wf-bf87b52ff4
 
 topology_randoms2 = split(topology_randoms, topology_randoms$ListType)
 topology_randoms2$gene_list$Target = cytoreason.gx::reorder_within(topology_randoms2$gene_list$Target.Identifier, topology_randoms2$gene_list$metricValue, topology_randoms2$gene_list$Type)

@@ -12,7 +12,7 @@ scaling = function(scale_vector, min_val = 0.1, max_val = 1) {
 
 ## Pre-processing the results to include only the signatures and criteria we want
 ## ====================================================================================
-Results = readRDS(get_workflow_outputs("wf-9a4e8e1dba"))
+Results = readRDS(get_workflow_outputs("wf-e0db493d42"))
 Results = bind_rows(Results) %>%
   dplyr::filter(!Target.Collection %in% c("Ligands","Mast","Itch","Neuronal")) %>%
   dplyr::filter(!str_detect(Target.Identifier, c("insilico|x2_|PAMP|CST|SP|aIgE|Icatibant|X2 late activation|X2 early activated|X2 early activation"))) %>%
@@ -41,6 +41,31 @@ chosenCriteria = c("Enrichment in L_vs_HC" = "Enrichment in L_vs_HC",
 Results_filtered = Results[which(Results$DataType %in% chosenCriteria),-13]
 Results_filtered$Criteria.Identifier = names(chosenCriteria)[match(Results_filtered$DataType, chosenCriteria)]
 
+# Integrate network criteria
+topology = readRDS(get_workflow_outputs("wf-8556686d74"))
+topology = topology %>%
+  mutate(DataType = "Network Density") %>%
+  dplyr::filter(Type == "bulk") %>%
+  dplyr::filter(Target.ID %in% unique(Results_filtered$Target.ID)) %>%
+  mutate(pvalue = ifelse(pvalue == 0, 1/1001, pvalue)) %>%
+  mutate(fdr = p.adjust(pvalue, method = "fdr")) %>%
+  mutate(log10_fdr = -log10(fdr))
+  
+
+centrality = readRDS(get_workflow_outputs("wf-72d490c885"))
+centrality = centrality %>%
+  mutate(DataType = "Network Centrality") %>%
+  dplyr::filter(Type == "bulk") %>%
+  dplyr::filter(Criteria.Identifier == "eigen_centrality_median") %>%
+  dplyr::filter(Target.ID %in% unique(Results_filtered$Target.ID)) %>%
+  mutate(pvalue = ifelse(pvalue == 0, 1/1001, pvalue)) %>%
+  mutate(fdr = p.adjust(pvalue, method = "fdr")) %>%
+  mutate(log10_fdr = -log10(fdr))
+
+allCriteria = bind_rows(Results_filtered, topology, centrality)
+pushToCC(allCriteria, tagsToPass = list(list(name="object",value="allCriteria")))
+# wf-fc0d0d2464
+
 
 ## Scaling each criterion
 ## ====================================
@@ -50,12 +75,23 @@ Results_filtered$log10_fdr = ifelse(Results_filtered$log10_fdr > 4, 4, Results_f
 # Multiply FDR and effect
 Results_filtered$score = Results_filtered$metricValue * Results_filtered$log10_fdr
 
+# Almost zero negatives and multiply FDR and effect
+floor_dec <- function(x, k = 2) { # function to take the lowest number above 0 and round it down
+  minimal_value = x[which(x > 0)]
+  minimal_value = floor(min(minimal_value) * 10^k) / 10^k
+  x[which(x < 0)] <- minimal_value
+  return(x)
+}
+
+
 # Per criteria we re-scale between 0.1 and 1
 scores = Results_filtered %>%
   group_by(DataType) %>%
+  mutate(rounded_effect = ifelse(DataType == "Adj Target_Pathway_PC1", floor_dec(metricValue, 3), floor_dec(metricValue))) %>%
   mutate(scaled_score = scaling(score)) %>%
   mutate(scaled_effect = scaling(metricValue)) %>%
   mutate(scaled_fdr = scaling(log10_fdr)) %>%
+  mutate(scaled_score_rounded = scaling(rounded_effect)) %>%
   ungroup()
 
 scores$Target.ID = factor(scores$Target.ID, ordered = T, levels = names(targetColors))
@@ -158,3 +194,34 @@ ggplot(rankings, aes(x = Target.Identifier, y = summedScore, fill = Target.ID)) 
   guides(fill = F) +
   labs(x = NULL, y = "Summed Scores")
 ggsave("~/analysis-s05/figures/Results/ranking_byFDR.png", scale = 1, width = 12, height = 6, bg = "white")
+
+
+
+## 1. Based on effect * fdr but zeroing negatives
+## --------------------------------------------------
+# Score per criteria
+ggplot(scores, aes(x = Target.Identifier, y = Criteria.Identifier)) +
+  spot.theme +
+  geom_point(aes(size = scaled_score_rounded, color = Target.ID))+
+  facet_grid(DataType ~ . ,scales = "free",space = "free")+
+  scale_color_manual(values = targetColors)
+ggsave("~/analysis-s05/figures/Results/scores_rounded.png", scale = 1.2, width = 12, height = 6, bg = "white")
+
+
+# Rank
+rankings = scores %>%
+  group_by(Target.Identifier, Target.ID) %>%
+  summarise(summedScore = sum(scaled_score_rounded)) %>%
+  ungroup() %>%
+  mutate(ranking = rank(-summedScore))
+
+ggplot(rankings, aes(x = Target.Identifier, y = summedScore, fill = Target.ID)) +
+  geom_bar(stat = "identity", color = "black") +
+  geom_text(data = function(x) subset(x, ranking <= 10), aes(y = 7, label = ranking), check_overlap = T) +
+  theme_minimal() +
+  theme(axis.text.x = element_text(angle = 90,hjust = 1, vjust = 0.5)) +
+  ggpubr::border() +
+  scale_fill_manual(values = targetColors) +
+  guides(fill = F) +
+  labs(x = NULL, y = "Summed Scores")
+ggsave("~/analysis-s05/figures/Results/ranking_rounded.png", scale = 1, width = 12, height = 6, bg = "white")

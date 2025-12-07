@@ -40,7 +40,7 @@ In vitro Mast cells experiment	x2cov_general_inhibition_late_50
 In vitro Mast cells experiment	x2cov_general_inhibition_late_50_archs_refined	
 Itch	Jha	Jha
 Itch	Nattkemper	Nattkemper
-Ligands	ADCYAP1	ADCYAP2
+Ligands	ADCYAP1	ADCYAP1
 Ligands	ADM	ADM
 Ligands	ALB	ALB
 Ligands	all_ligands	all_ligands
@@ -57,13 +57,13 @@ Ligands	IGFBP5	IGFBP5
 Ligands	NPFF	NPFF
 Ligands	OXT	OXT
 Ligands	PDYN	PDYN
-Ligands	PF4	PF5
-Ligands	PRG2	PRG3
-Ligands	RNASE3	RNASE4
+Ligands	PF4	PF4
+Ligands	PRG2	PRG2
+Ligands	RNASE3	RNASE3
 Ligands	SST	SST
 Ligands	TAC1	TAC1
 Ligands	TAC4	TAC4
-Ligands	TPM1	TPM2
+Ligands	TPM1	TPM1
 Ligands	VIP	VIP
 Mast	mast_at	mast_at
 Mast	mast_crs	mast_crs
@@ -74,12 +74,12 @@ Negative Controls	BMP7	BMP7
 Negative Controls	random	random
 Negative Controls	smoothedRandom_bottom50	smoothedRandom_bottom50
 Negative Controls	smoothedRandom_top50	smoothedRandom_top50
-Negative Controls	TGFB2	TGFB3
+Negative Controls	TGFB2	TGFB2
 Neuronal	BDNF	BDNF
 Neuronal	NGF	NGF
 Neuronal	NO	NO
-Neuronal	NRG1	NRG2
-Neuronal	NTF4	NTF5
+Neuronal	NRG1	NRG1
+Neuronal	NTF4	NTF4
 Positive controls	CXCL4	CXCL4
 Positive controls	IL4	IL4
 Positive controls	IL6	IL6

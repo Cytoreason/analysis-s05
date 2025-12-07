@@ -94,3 +94,106 @@ ggplot(enrichment_filtered, aes(x = EASI, y = MolecularScore)) +
   theme_minimal() +
   labs(title = "Correlaton between EASI scores and Molecular Scores")
 ggsave("~/analysis-s05/figures/AD Model/corr_EASI_MS_all.png", bg = "white")
+
+
+
+## Correlation between X2 signature and EASI scores
+## =========================================================
+library(WGCNA)
+ccm_wfid = "wf-8e948630d7"
+ccm= as_ccm_fit(ccm_wfid)
+con = designSampleGroupContrasts(AnalysisModel2Group(ccm, type = "L_vs_NL"))
+
+signatureMapping = readRDS(get_workflow_outputs("wf-b520743a43"))
+pairings = unified_metadata %>%
+  dplyr::filter(dataset_id %in% c("GSE130588__GPL570","GSE59294__GPL570")) %>%
+  dplyr::filter(time == "D0") %>%
+  dplyr::filter(sample_classification %in% c("Lesion","Non Lesion"))
+
+pathways = c("time","sample_classification","condition","experiment_id","EASI")
+enrichment =  lapply(ccm$datasets[which(names(ccm$datasets) %in% c("GSE130588__GPL570","GSE59294__GPL570"))], function(d){
+  a = pData(assayDataExpression(d))[,pathways] %>%
+    rownames_to_column(., var = "sample_id")
+  b = statistic_table(d$gene_set_activity, subset = ~(submodel == "bulk" & collection == "X2"))
+  b = reshape2::dcast(b, sample_id ~ gene_set, value.var = "value")
+  return(merge(a,b, by="sample_id"))
+}) %>% do.call(rbind,.)
+
+enrichment_baseline = enrichment %>%
+  dplyr::filter(time %in% c("W0","Pre") & sample_classification == "Lesion" & condition == "atopic dermatitis")
+
+x2 = enrichment_baseline[,c(1:6, which(colnames(enrichment_baseline) %in% c("IL4","x2_general_inhibition_early_50", "x2_general_inhibition_early_50_archs_refined","SP_general_inhibition_late_50_archs_refined")))]
+colnames(x2)[7:10] = signatureMapping$New_identifier[match(colnames(x2)[7:10], signatureMapping$signature)]
+
+# Compute bicor + FDR per signature
+bicor_tabl = lapply(colnames(x2)[7:10], function(sig){
+  bp = WGCNA::bicorAndPvalue(x2$EASI, x2[,sig], use = "pairwise.complete.obs")
+  data.frame(
+    signature = sig,
+    r = as.numeric(bp$bicor),
+    p = as.numeric(bp$p)
+  )
+}) %>% bind_rows() %>%
+    mutate(FDR = p.adjust(p, method = "fdr"),
+           FDR_fmt = dplyr::case_when(
+             FDR <= 0.1        ~ sprintf("%.1e", FDR),  # scientific for ≤ 0.1
+             TRUE              ~ sprintf("%.3f", FDR)   # fixed decimal otherwise
+           ),
+           label = sprintf("bicor = %.2f, FDR = %s", r, FDR_fmt)
+    )
+
+bicor_grouped = lapply(unique(x2$experiment_id), function(experiment){
+  lapply(colnames(x2)[7:10], function(sig){
+    dat = x2[which(x2$experiment_id == experiment),]
+    bp = WGCNA::bicorAndPvalue(dat$EASI, dat[,sig], use = "pairwise.complete.obs")
+    data.frame(
+      signature = sig,
+      experiment_id = experiment,
+      r = as.numeric(bp$bicor),
+      p = as.numeric(bp$p)
+    )
+  }) %>% bind_rows() %>%
+    mutate(FDR = p.adjust(p, method = "fdr"),
+           FDR_fmt = dplyr::case_when(
+             FDR <= 0.1        ~ sprintf("%.1e", FDR),  # scientific for ≤ 0.1
+             TRUE              ~ sprintf("%.3f", FDR)   # fixed decimal otherwise
+           ),
+           label = sprintf("bicor = %.2f, FDR = %s", r, FDR_fmt)
+    )
+}) %>% do.call(rbind,.)
+
+
+x2 = reshape2::melt(x2, id.vars = 1:6, variable.name = "signature", value.name = "sample_enrichment")
+x2 = x2 %>% left_join(., bicor_tabl, by = "signature")
+
+ggplot(x2, aes(x = EASI, y = sample_enrichment)) +
+  geom_point(aes(color = experiment_id)) +
+  geom_smooth(method="lm", se = F, color = "black") +
+  geom_smooth(method="lm", se = F, aes(color = experiment_id)) +
+  geom_text(x = Inf, y = Inf, aes(label = label), check_overlap = T, show.legend = F, hjust = 1.1, vjust = 2, size = 3)+
+  scale_color_brewer(palette = "Set2")+
+  facet_wrap(~signature, scales = "free_y") +
+  theme_minimal() +
+  theme(legend.position = "bottom", legend.direction = "horizontal") +
+  ggpubr::border()+
+  labs(x = "EASI score", y = "Signature enrichment", color = NULL)
+
+
+
+as_ccm_fit(AssetData(CCM_WF_1))
+config_gs <-  modelMetadata(ccm_fit_gs)
+#contrasts <- designSampleGroupContrastData(ccm_fit_gs)
+res <- designSampleGroupContrasts(ccm_fit_gs)
+uc_res <-  lapply(names(ccm_fit_gs$datasets), function(cur_dataset) {   message("Processing dataset: ", cur_dataset)      cur_dataset_df <- ccm_fit_gs$datasets[[cur_dataset]]   model_names <- names(cur_dataset_df$model)      res_df <- do.call('rbind', lapply(model_names, function(cur_model) {     message("  Model: ", cur_model)
+res <- cur_dataset_df$model[[cur_model]]
+fit <- analysisResultElement(res, method)
+all_contrasts <- designSampleGroupContrasts(cur_model,
+                                            data = ccm_fit_gs$datasets[[cur_dataset]])
+if (length(all_contrasts) == 0) {       warning("    Skipping model ", cur_model, " due to no contrasts.")       return(NULL)     }
+res <- tryCatch({       temp <- data.frame(ldply(all_contrasts, ddply, c("level", "label"),
+                                                 plyr::summarize, n = length(label), .id = "term"),                          
+                                           stringsAsFactors = FALSE)
+temp$dataset_id <- cur_dataset       
+temp$model <- cur_model      
+temp     }, error = function(e) {       warning("    Error processing model ", cur_model, ": ", conditionMessage(e))       return(NULL)     })          return(res)   }))
+return(res_df) })

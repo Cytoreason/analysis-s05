@@ -15,10 +15,10 @@ collectionMapping = readRDS(get_workflow_outputs("wf-d3240e7fb6"))
   collectionMapping$previousID = paste0("X2:",collectionMapping$signature)
   collectionMapping$previousID[which(collectionMapping$collection == "negativeControls")] <- paste0("negativeControls:",collectionMapping$signature[which(collectionMapping$collection == "negativeControls")])
   collectionMapping$previousID[which(collectionMapping$signature %in% c("BMP4","BMP6","BMP7","TGFB2"))] <- paste0("X2:",collectionMapping$signature[which(collectionMapping$signature %in% c("BMP4","BMP6","BMP7","TGFB2"))])
-signatures = readRDS(get_workflow_outputs("wf-890b2caf5c"))
+signatures = readRDS(get_workflow_outputs("wf-a24a2031e8"))
 signatureMapping = merge(collectionMapping, signatures, by.x = "signature", by.y = "Old_identifier", all=T)
 pushToCC(signatureMapping)
-# wf-b520743a43
+# wf-fcb1ef2bbd
 
 
 # 2. Extraction
@@ -100,7 +100,7 @@ run_function_dist(FUN = function(results_wfid){
 
   results_wfid = get_workflow(results_wfid, wait = T)
   Results = readRDS(get_workflow_outputs(results_wfid))
-  signatureMapping = readRDS(get_workflow_outputs("wf-b520743a43"))
+  signatureMapping = readRDS(get_workflow_outputs("wf-fcb1ef2bbd"))
   geneCollections = unique(signatureMapping$collection)
   
   processResults = function(data, tableName) {
@@ -189,9 +189,9 @@ memory_request = "25Gi")
 # wf-a30ed87a96
 # wf-c60a87ef45
 # wf-d37ae65109
-# wf-39a889155d
+# wf-edaf4d1f2d
 
-Results = readRDS(get_workflow_outputs("wf-39a889155d"))
+Results = readRDS(get_workflow_outputs("wf-edaf4d1f2d"))
 Results = list(DZEnrichment = Results[[1]],
                Target_Cell = Results[[2]][which(Results[[2]]$DataType == "Target_Cell"),],
                Target_Gene = Results[[2]][which(Results[[2]]$DataType == "Target_Gene"),],
@@ -222,7 +222,7 @@ pushToCC(Results, tagsToPass = list(list(name="object",value="processed_results"
 # wf-a53211cea7
 # wf-cd3c366c62
 # wf-1bea2eb00f
-# wf-9a4e8e1dba
+# wf-e0db493d42
 
 uploadToBQ(Results$DZEnrichment, bqdataset = "s05_atopic_dermatitis", tableName = "Results_DZEnrichment")
 uploadToBQ(Results$Target_Cell, bqdataset = "s05_atopic_dermatitis", tableName = "Results_Target_Cell")

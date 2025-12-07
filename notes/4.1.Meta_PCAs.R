@@ -328,3 +328,10 @@ ggplot(cells[which(cells$condition %in% c("AD","HC")),],
   theme(legend.position = "none", panel.spacing.x = unit(2, "cm"))+
   labs(x = NULL, title = "Cell meta PCA scores", y = "Sample Score on the PC")
 ggsave("~/analysis-s05/figures/AD Model/cellPCs_sampleClassification.png", bg = "white", scale=1, width = 8, height = 5, units = "in")
+
+cells_wide = reshape2::dcast(cells, sample_id + sample_classification + condition ~ PC)
+ggplot(cells_wide, aes(x = `Cell Meta PC1`, y = `Cell Meta PC2`)) +
+  geom_point(aes(color = sample_classification)) +
+  theme_minimal()+
+  labs(color=NULL) +
+  theme(legend.position = "bottom",legend.direction = "horizontal")
