@@ -265,3 +265,7 @@ Heatmap(ct_heatmap[,1,drop=F], name = "cell\ncontribution",
           column_title = "ct_test estimate of keratinocytes", column_title_side = "top",
           cell_fun = function(j, i, x, y, width, height, fill) {
             grid.text(ct_stars[i, j], x, y, gp = gpar(fontsize = 10))})
+
+
+## Look at cell meta PCs
+## ===============================
