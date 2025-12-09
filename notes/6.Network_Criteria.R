@@ -416,3 +416,32 @@ ggplot(topology_randoms2$random, aes(x = metricValue, y = Target)) +
   ggpubr::border()+
   labs(x = "Density", y = NULL)
 ggsave("~/analysis-s05/figures/Results/network_density.png", width = 6, height = 6, bg= "white")
+
+
+
+### Visualization of Adjusted
+### ======================================
+centrality_randoms=readRDS(get_workflow_outputs("wf-eca695022d"))
+
+centrality_randoms2 = split(centrality_randoms, centrality_randoms$ListType)
+centrality_randoms2$gene_list$Target = cytoreason.gx::reorder_within(centrality_randoms2$gene_list$Target.Identifier, centrality_randoms2$gene_list$metricValue, centrality_randoms2$gene_list$Type)
+or = levels(centrality_randoms2$gene_list$Target)
+centrality_randoms2$random$Target <- factor(
+  paste0(centrality_randoms2$random$Target.Identifier, "___", centrality_randoms2$random$Type),
+  levels = or
+)
+
+adj = list(gene_list = centrality_randoms2$gene_list[which(centrality_randoms2$gene_list$Type == "adjusted"),],
+            random = centrality_randoms2$random[which(centrality_randoms2$random$Type == "adjusted"),])
+
+ggplot(adj$random, aes(x = metricValue, y = Target)) +
+  geom_point(color = "grey", alpha = 0.3, size = 3) +
+  geom_point(data = adj$gene_list, inherit.aes = T, aes(color = Target.ID), size=6) +
+  cytoreason.gx::scale_y_reordered()+
+  scale_color_manual(values = targetColors) +
+  scale_x_continuous(transform = squash_axis(0.005,0.04,10))+
+  theme_minimal() +
+  theme(legend.position = "none") +
+  ggpubr::border()+
+  labs(x = "Median Eigen Centrality", y = NULL)
+ggsave("~/analysis-s05/figures/Results/network_eigenCentrality_adj.png", width = 6, height = 6, bg= "white")

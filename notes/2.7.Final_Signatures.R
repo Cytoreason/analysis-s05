@@ -101,36 +101,68 @@ mast_at = c("2182","27306","1359","64499","1511","2624","23430","4013","7177","9
 mast_crs <- cytoreason.deconvolution::SignatureCollection("gut_v9")
 mast_crs = mast_crs@gene_set[["CRCL_0000009"]]
 
+
 # 5.3. Tryptase
 # ---------------------
 x2 = readRDS(get_workflow_outputs("wf-e90c83f33a")) %>% lapply(., as.character)
 mast_tryptase = x2[str_detect(names(x2),"tryptase")]
 
+# 5.4. Mast top 50
+# ---------------------
+mast_wu = readRDS(get_workflow_outputs("wf-66ba2c4346"))
 
-mast = list(mast_crs = mast_crs, mast_at = mast_at, mast_tryptase = mast_tryptase$mast_tryptase_50)
+mast = list(mast_crs = mast_crs, 
+            mast_at = mast_at, 
+            mast_tryptase = mast_tryptase$mast_tryptase_50,
+            mast_wu = mast_wu)
 pushToCC(mast, tagsToPass = list(list(name="object",value="mast_signatures")))
-# wf-e4cf3d0777
+# wf-2312a1f064
 
 
-### 6. Pooling all signatures
+# 6. Add Th2 genesets to signatures we pass
+# ---------------------------------------------------
+library(biomaRt)
+geneMapping = toTable(org.Hs.eg.db::org.Hs.egSYMBOL)
+
+th2 = openxlsx::read.xlsx("~/analysis-s05/data/Type 2 inflammation signatures.xlsx", sheet = 2)
+th2 = as.list(th2)
+th2 = lapply(th2, function(x) x[!is.na(x)])
+th2 = lapply(th2, function(x) str_trim(x,"both"))
+th2_pathways = th2$Th2_pathways
+th2 = th2[-which(names(th2) == "Th2_pathways")]
+
+# translate the mouse genes to human
+human <- useMart("ensembl", dataset = "hsapiens_gene_ensembl", host = "https://dec2021.archive.ensembl.org/")
+mouse <- useMart("ensembl", dataset = "mmusculus_gene_ensembl", host = "https://dec2021.archive.ensembl.org/")
+
+homologs <- getLDS(attributes = c("mgi_symbol", "entrezgene_id"),
+                   filters = "mgi_symbol",
+                   values = th2$Tibbitt,
+                   mart = mouse,
+                   attributesL = c("hgnc_symbol", "entrezgene_id"),
+                   martL = human)
+
+th2$Tibbitt = unique(homologs$HGNC.symbol)
+
+th2 = lapply(th2, function(x) geneMapping$gene_id[match(x, geneMapping$symbol)])
+pushToCC(th2, tagsToPass = list(list(name="object",value="th2_signatures")))
+# wf-e02cfb9673
+
+
+### 7. Pooling all signatures
 ### ================================
 x2 = readRDS(get_workflow_outputs("wf-e90c83f33a")) %>% lapply(., as.character)
 ligands = readRDS(get_workflow_outputs("wf-0ee398830a"))
 positives = readRDS(get_workflow_outputs("wf-3abe7c76cd")) %>% lapply(., as.character)
 itch = readRDS(get_workflow_outputs("wf-16fa7ba6c0"))
-mast = readRDS(get_workflow_outputs("wf-e4cf3d0777"))
-
-# allSignatures = list(x2 = c(x2, ligands,positives),
-#                      mast = mast,
-#                      itch = itch)
-# 
-# pushToCC(allSignatures, tagsToPass = list(list(name="object",value="allSignatures")))
-# # wf-b33649db09
+mast = readRDS(get_workflow_outputs("wf-2312a1f064"))
+th2 = readRDS(get_workflow_outputs("wf-e02cfb9673"))
 
 nc = x2[str_detect(names(x2),"nc_50|Random")]
   names(nc) = str_remove(names(nc),"nc_50.")
 x2 = x2[!str_detect(names(x2),"nc_|Random")]
 x2 = x2[!str_detect(names(x2),"tryptase")]
+x2 = x2[!str_detect(names(x2),"cov")]
 
 names(positives) = str_remove(names(positives), "CytoSig_50Genes__Undivided__|P01__BioNetSmooth_signatures__|P03__Validations__|P07__CytoSig__")
 
@@ -140,10 +172,12 @@ names(itch) = c("Nattkemper","Jha")
 X2 = c(x2, ligands, positives, itch, mast)
 
 allSignatures = list(X2 = X2,
-                     negativeControls = nc)
+                     negativeControls = nc,
+                     Th2 = th2)
 
 pushToCC(allSignatures, tagsToPass = list(list(name="object",value="allSignatures")))
 # wf-b1950a97bd
+# wf-d22894f90b
 
 signatures.long = reshape2::melt(allSignatures)
 signatures.long = signatures.long[-which(duplicated(signatures.long[,2:3])),3:2] # keep only the signature name and collection
@@ -152,12 +186,12 @@ signatures.long$feature_id = paste0(signatures.long$Target.Collection, "__", sig
 pushToCC(signatures.long, tagsToPass = list(list(name="object",value="targetMapping.V4"),
                                             list(name="project",value="evo")))
 # wf-6c4b539629
+#wf-09e6717c3e
 
 collectionMapping = lapply(names(list(x2=x2,ligands=ligands, positives=positives, itch=itch,mast=mast, nc=nc)), 
        function(collection){
   return(data.frame(signature = names(get(collection)), collection = str_to_title(collection)))
 }) %>% do.call(rbind,.)
-collectionMapping$collection[which(collectionMapping$signature == "mast_tryptase")] <- "Mast"
 collectionMapping$collection[which(collectionMapping$collection == "Nc")] <- "NegativeControls"
 collectionMapping$collection[str_detect(collectionMapping$signature,"BMP|TGFB")] <- "Negative Controls"
 collectionMapping$collection[str_detect(collectionMapping$signature,"NGF|BDNF|NO|NRG1|NTF4")] <- "Neuronal"
@@ -167,4 +201,4 @@ collectionMapping = rbind(collectionMapping, data.frame(signature = c("smoothedR
                                                collection = rep("Negative Controls",3)))
 pushToCC(collectionMapping)
 # wf-d3240e7fb6
-
+# wf-83b199630d

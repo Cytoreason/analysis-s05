@@ -4,7 +4,7 @@ library(tidyverse)
 # 1. Inputs
 # -----------------------------
 ccm = as_ccm_fit("wf-08a6a0a503")
-signatures = readRDS(get_workflow_outputs("wf-b1950a97bd"))
+signatures = readRDS(get_workflow_outputs("wf-d22894f90b"))
 ## removing the extra data set isn't feasible within the constraints of the project - need to re-run the disease model, causing compatibility issues
 
 
@@ -20,12 +20,69 @@ MS = MS %>%
   mutate(condition = factor(condition, ordered = T, levels = c("atopic dermatitis","contact dermatitis","psoriasis","healthy")))
 
 
-# 3. Integrate with pathways meta pcs
+# 3. Unify SCORAD/EASI scores and change name of cell meta PCs
+# ----------------------------------------------------------------
+for (x in names(ccm$datasets)){
+  pDataset = pData(ccm$datasets[[x]])
+  if(x %in% c("GSE121212__GPL16791","GSE137430__rnaseq","GSE141570__GPL20301","GSE147424__GPL16791","GSE157194__GPL21290")) { 
+    samplename = "sample_id"
+  } else {
+    samplename = "geo_accession"
+  }
+  
+  # integrating molecular score
+  pDataset$MolecularScore <- MS$molecular_score[match(pDataset$geo_accession, MS$geo_accession)]
+
+  if(x %in% c("GSE130588__GPL570","GSE27887__GPL570","GSE58558__GPL570")) { # there we have SCORAD
+    idx = which(str_detect(colnames(pDataset),"SCORAD|Scorad"))[1]
+    pDataset$SCORAD = as.numeric(pDataset[,idx])
+    rm(idx)
+  }
+  if(x %in% c("GSE130588__GPL570","GSE59294__GPL570")) { # there we have EASI
+    idx = which(str_detect(colnames(pDataset),"EASI"))[1]
+    pDataset$EASI = as.numeric(pDataset[,idx])
+    rm(idx)
+  }
+  
+  pData(ccm$datasets[[x]]) <- pDataset
+  rm(pDataset)
+}
+
+
+## 4. Generating a model with keratinocytes as an adjustment model
+## and SCOARD/EASI/cell meta PCs standardized
+## --------------------------------------------------------------------
+ccm_api_generate_ccm(ccm,
+                     qc = FALSE,
+                     term_metadata = FALSE, # fails for some reason
+                     adjustment_models = list("1" = list(c("meta1_pc1"), c("CRCL_0000348"),c("meta1_pc1","CRCL_0000348"))),
+                     model = .skip("cell_specific_differences"),
+                     image = "master_1.0.1",
+                     tags = list(list(tissue="skin"),
+                                 list(condition="AD"),
+                                 list(project="evo"),
+                                 list(name="adjustment",value="keratinocyte_only")))
+# generate_ccm -- Tue Dec  9 07:25:54 2025: wf-832ab799be []
+
+new_ccm = as_ccm_fit("wf-832ab799be")
+
+
+# 5. Integrate with pathways meta pcs
 # ------------------------------------------
-pathwayPCs_bulk = readRDS(get_workflow_outputs("wf-9714e3a025"))
-pathwayPCs_adj = readRDS(get_workflow_outputs("wf-72065e3e29"))
-  colnames(pathwayPCs_adj) = str_replace(colnames(pathwayPCs_adj),"pathway","adj_pathway")
-pathwayPCs = merge(pathwayPCs_bulk, pathwayPCs_adj, by = 1:2)
+pathwayPCs = readRDS(get_workflow_outputs("wf-e8f514f3f1"))
+pathwayPCs = pathwayPCs %>%
+  mutate(term = ifelse(term == "AD", "DZ_vs_HC", term)) %>%
+  mutate(collection = ifelse(collection == "All","",collection))%>%
+  mutate(suffix = paste0(term,"_",submodel,"_",collection)) %>%
+  dplyr::select(-c(term:collection))
+
+pathwayPCs = reshape2::melt(pathwayPCs, id.vars = c(1,2,6), measured.vals = 3:5, variable.name = "prefix", value.name = "sampleScore")
+pathwayPCs = pathwayPCs %>%
+  mutate(label = paste0(prefix,"_",suffix)) %>%
+  dplyr::select(-c(suffix:prefix))
+
+pathwayPCs = reshape2::dcast(pathwayPCs, dataset + sample_id ~ label)
+
 
 for (x in names(ccm$datasets)){
   pDataset = pData(ccm$datasets[[x]])
@@ -59,6 +116,7 @@ for (x in names(ccm$datasets)){
   pData(ccm$datasets[[x]]) <- pDataset
   rm(pDataset)
 }
+
 
 
 ## General
