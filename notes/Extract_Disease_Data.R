@@ -1,7 +1,9 @@
+devtools::load_all("~/analysis-s05/R/utils.R")
 library(cytoreason.ccm.pipeline)
 library(tidyverse)
 
-ccm = as_ccm_fit("wf-08a6a0a503")
+ccm = as_ccm_fit("wf-08a6a0a503") # the original disease model
+ccm = as_ccm_fit("wf-832ab799be") # adding keratinocyte adjustment
 geneMapping = toTable(org.Hs.eg.db::org.Hs.egSYMBOL)
 # uploadToBQ(geneMapping, bqdataset = "s05_atopic_dermatitis", tableName = "geneMapping")
 
@@ -12,7 +14,11 @@ gxgsa = rbind(statistic_table(ccm$meta$L_vs_NL$gx_diff$gx_gsa),
               statistic_table(ccm$meta$L_vs_HC$gx_diff$gx_gsa),
               statistic_table(ccm$meta$NL_vs_HC$gx_diff$gx_gsa))
 gxgsa = gxgsa %>%
-  dplyr::filter(term %in% c("L_vs_NL","DZ_vs_HC","L_vs_HC","NL_vs_HC"))
+  dplyr::filter(term %in% c("L_vs_NL","DZ_vs_HC","L_vs_HC","NL_vs_HC")) %>%
+  mutate(submodel = case_when(submodel == "bulk" ~ "bulk",
+                              submodel == "adjusted__1__meta1_pc1" ~ "adjusted_metaPC1",
+                              submodel == "adjusted__1__CRCL_0000348" ~ "adjusted_keratinocyte",
+                              submodel == "adjusted__1__meta1_pc1_CRCL_0000348" ~ "adjusted_metaPC1_keratinocytes"))
 
 uploadToBQ(gxgsa, bqdataset = "s05_atopic_dermatitis", tableName = "AD_gx_gsa")
 
@@ -23,26 +29,81 @@ gx_diff = rbind(statistic_table(ccm$meta$L_vs_NL$gx_diff$gx_diff),
               statistic_table(ccm$meta$AD$gx_diff$gx_diff),
               statistic_table(ccm$meta$L_vs_HC$gx_diff$gx_diff),
               statistic_table(ccm$meta$NL_vs_HC$gx_diff$gx_diff))
+
 gx_diff = gx_diff %>%
-  dplyr::filter(term %in% c("L_vs_NL","DZ_vs_HC","L_vs_HC","NL_vs_HC"))
+  dplyr::filter(term %in% c("L_vs_NL","DZ_vs_HC","L_vs_HC","NL_vs_HC")) %>%
+  mutate(submodel = case_when(submodel == "bulk" ~ "bulk",
+                              submodel == "adjusted__1__meta1_pc1" ~ "adjusted_metaPC1",
+                              submodel == "adjusted__1__CRCL_0000348" ~ "adjusted_keratinocyte",
+                              submodel == "adjusted__1__meta1_pc1_CRCL_0000348" ~ "adjusted_metaPC1_keratinocytes"))
 
 uploadToBQ(gx_diff, bqdataset = "s05_atopic_dermatitis", tableName = "AD_gx_diff")
 
 
 # 2. ct_test
 # ------------------------------------
+cells = read.csv("~/data/skin.csv", sep = "\t", header = F)
 ct_test = rbind(statistic_table(ccm$meta$L_vs_NL$ct_test),
                 statistic_table(ccm$meta$AD$ct_test),
                 statistic_table(ccm$meta$L_vs_HC$ct_test),
                 statistic_table(ccm$meta$NL_vs_HC$ct_test))
+
 ct_test = ct_test %>%
-  dplyr::filter(term %in% c("L_vs_NL","DZ_vs_HC","L_vs_HC","NL_vs_HC"))
+  mutate(feature_id = cells$V1[match(feature_id, cells$V2)])
 
 uploadToBQ(ct_test, bqdataset = "s05_atopic_dermatitis", tableName = "AD_ct_test")
 
 
 
-# 4. Disease-Model related graphs
+# 4. Correlation between cells and pathways/genes
+# ----------------------------------------------------
+# geneset/cell
+# ----------------
+subsetting = ~(collection %in% c("h","kegg","reactome","btm") &
+                 submodel %in% c("bulk","adjusted__1__meta1_pc1","adjusted__1__CRCL_0000348","adjusted__1__meta1_pc1_CRCL_0000348"))
+
+geneset_cell = rbind(build_service_result_tables(ccm$meta$L_vs_NL$feature_cell_correlations, subset = subsetting)$gene_set_activity_cell_correlations %>%
+                       mutate(term = "L_vs_NL"),
+                     build_service_result_tables(ccm$meta$AD$feature_cell_correlations, subset = subsetting)$gene_set_activity_cell_correlations %>%
+                       mutate(term = "DZ_vs_HC"),
+                     build_service_result_tables(ccm$meta$L_vs_HC$feature_cell_correlations, subset = subsetting)$gene_set_activity_cell_correlations %>%
+                       mutate(term = "L_vs_HC"),
+                     build_service_result_tables(ccm$meta$NL_vs_HC$feature_cell_correlations, subset = subsetting)$gene_set_activity_cell_correlations %>%
+                       mutate(term = "NL_vs_HC"))
+
+geneset_cell = geneset_cell %>%
+  dplyr::filter(sample_subset != "L_vs_NL") %>% # unclear why this is included
+  mutate(feature_id_2 = cells$V1[match(feature_id_2, cells$V2)]) %>%
+  mutate(submodel = case_when(submodel == "bulk" ~ "bulk",
+                              submodel == "adjusted__1__meta1_pc1" ~ "adjusted_metaPC1",
+                              submodel == "adjusted__1__CRCL_0000348" ~ "adjusted_keratinocyte",
+                              submodel == "adjusted__1__meta1_pc1_CRCL_0000348" ~ "adjusted_metaPC1_keratinocytes"))
+
+uploadToBQ(geneset_cell, bqdataset = "s05_atopic_dermatitis", tableName = "AD_geneset_cell_correlations")
+
+
+# gene/cell
+# ----------------
+subsetting = ~(submodel %in% c("bulk","adjusted__1__meta1_pc1","adjusted__1__CRCL_0000348","adjusted__1__meta1_pc1_CRCL_0000348"))
+
+gene_cell = rbind(build_service_result_tables(ccm$meta$L_vs_NL$gene_cell_correlations, subset = subsetting)$gene_cell_correlations,
+                 build_service_result_tables(ccm$meta$AD$gene_cell_correlations, subset = subsetting)$gene_cell_correlations,
+                 build_service_result_tables(ccm$meta$L_vs_HC$gene_cell_correlations, subset = subsetting)$gene_cell_correlations,
+                 build_service_result_tables(ccm$meta$NL_vs_HC$gene_cell_correlations, subset = subsetting)$gene_cell_correlations)
+
+gene_cell = gene_cell %>%
+  dplyr::filter(sample_subset != "L_vs_NL") %>% # unclear why this is included
+  mutate(feature_id_2 = cells$V1[match(feature_id_2, cells$V2)]) %>%
+  mutate(symbol = geneMapping$symbol[match(feature_id_2, geneMapping$gene_id)]) %>%
+  mutate(submodel = case_when(submodel == "bulk" ~ "bulk",
+                              submodel == "adjusted__1__meta1_pc1" ~ "adjusted_metaPC1",
+                              submodel == "adjusted__1__CRCL_0000348" ~ "adjusted_keratinocyte",
+                              submodel == "adjusted__1__meta1_pc1_CRCL_0000348" ~ "adjusted_metaPC1_keratinocytes"))
+
+uploadToBQ(gene_cell, bqdataset = "s05_atopic_dermatitis", tableName = "AD_gene_cell_correlations")
+
+
+# 5. Sample classifications
 # --------------------------------------
 unified_metadata = read_asset("wf-e82a5ab3b6")
 unified_metadata$sample_classification[which(unified_metadata$sample_classification == "Normal")] <- "HC"
@@ -62,45 +123,6 @@ sampleClassifications.inventory = unified_metadata %>%
 sampleClassifications.inventory$notes = ifelse(sampleClassifications.inventory$dataset_id_short == "GSE32473",
                                                "EASI unavailable, but reduction in EASI is available","")
 uploadToBQ(sampleClassifications.inventory, bqdataset = "s05_atopic_dermatitis", tableName = "AD_sampleClassifications_inventory")
-
-
-# 5. Correlation between cells and pathways/genes
-# ----------------------------------------------------
-feature_cell = build_service_result_tables(ccm$meta$AD$feature_cell_correlations, assay_element = c("exprs","exprs_adjusted__1__1"))
-
-feature_cell = lapply(names(feature_cell[["gene_set_activity"]]), function(model){
-  lapply(names(feature_cell[["gene_set_activity"]][[model]]), function(samples){
-    df = feature_cell[["gene_set_activity"]][[model]][[samples]]
-    df[,c("collection","pathway")] = do.call(rbind, lapply(df$feature_id_1, function(x) strsplit(x, "__")[[1]]))
-    df$model = ifelse(model == "exprs", "bulk", "adjusted")
-    df$samples = samples
-    df = df[,c(1,10,11,2:9,12:13)]
-    rownames(df) = NULL
-    return(df)
-  }) %>% do.call(rbind,.)
-}) %>% do.call(rbind,.)
-
-feature_cell = feature_cell[-which(feature_cell$samples == "__all__"),]
-uploadToBQ(feature_cell, bqdataset = "s05_atopic_dermatitis", tableName = "AD_feature_cell_correlations")
-
-
-gene_cell = build_service_result_tables(ccm$meta$AD$gene_cell_correlations, assay_element = c("exprs","exprs_adjusted__1__1"))
-
-gene_cell = lapply(names(gene_cell), function(model){
-  lapply(names(gene_cell[[model]]), function(samples){
-    df = gene_cell[[model]][[samples]]
-    df$symbol = geneMapping$symbol[match(df$feature_id_1, geneMapping$gene_id)]
-    df$model = ifelse(model == "exprs", "bulk", "adjusted")
-    df$samples = samples
-    df = df[,c(1,10,2:9,11:12)]
-    rownames(df) = NULL
-    return(df)
-  }) %>% do.call(rbind,.)
-}) %>% do.call(rbind,.)
-
-gene_cell = gene_cell[-which(gene_cell$samples == "__all__")]
-uploadToBQ(gene_cell, bqdataset = "s05_atopic_dermatitis", tableName = "AD_gene_cell_correlations")
-
 
 # 6. Disease network edges
 # --------------------------------

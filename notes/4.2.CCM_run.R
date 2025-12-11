@@ -1,3 +1,4 @@
+devtools::load_all("~/analysis-s05/R/utils.R")
 library(cytoreason.ccm.pipeline)
 library(tidyverse)
 

@@ -9,10 +9,12 @@ library(ComplexHeatmap)
 library(tidyverse)
 
 ccm = as_ccm_fit("wf-08a6a0a503")
+ccm = as_ccm_fit("wf-832ab799be")
 
 # Run ct-test on adjusted (residual gene expression) data - per adjustment submodel:
 ## AD:
 ccm_fit_AD <- read_data(AssetData("wf-08a6a0a503:0:ccm_fit_with_data.qs"))
+ccm_fit_AD <- read_data(AssetData("wf-832ab799be:0:ccm_fit_with_data.qs"))
 
 # Filter ccm_fit to only relevant datasets/model: (that have effect_id == "AD" or "L_vs_NL")
 selectedEffect = "L_vs_HC"
@@ -68,29 +70,13 @@ RES_AD <- apply_model_analysis(ccm_fit_AD_filt, function(model, ccm_dataset){
   res = read_asset(wf)
   names(res) = adjusted_elts
 
-  # # local execution
-  # res <- lapply(setNames(nm = adjusted_elts), function(elt){
-  #
-  #   # compute contributions on adjusted expresison element
-  #   eset_elt <- cytoreason.ccm.pipeline:::subset_assayData(eset, elt)
-  #   ct_contrib_adjusted <- cytoreason.ccm.pipeline:::call_with_cache(ccm_service_cell_contribution,
-  #                                                                    expression_data = eset_elt,
-  #                                                                    signature_collection = signature_collection)
-  #
-  #   # compute ct_test on adjusted contributions
-  #   analysisResultElement(ccm_dataset, "cell_contribution", overwrite = TRUE) <-  ct_contrib_adjusted
-  #   fit_ct_test <- cytoreason.ccm.pipeline:::ccm_service_cell_contribution_differences(ccm_dataset = ccm_dataset,
-  #                                                                                      design = ccm_dataset[["model"]],
-  #                                                                                      match.pair = "pairwise")
-  #   return(list(cell_contribution = ct_contrib_adjusted, ct_test = fit_ct_test))
-  # })
-
   cytoreason.ccm.pipeline:::.set_ccm_service_class(list(submodel = res), "cell_contribution_adjusted")
 
 }, by_model = TRUE)
 pushToCC(RES_AD) # wf-a958262aa8 L_vs_NL
 pushToCC(RES_AD) # wf-884b5ef8ca DZ_vs_HC
 pushToCC(RES_AD) # wf-9a5fce551b L_vs_HC
+pushToCC(RES_AD) # wf-9a5fce551b L_vs_HC - keratinocyte adjustment
 
 
 # meta-analysis

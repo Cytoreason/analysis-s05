@@ -1,6 +1,5 @@
 devtools::load_all("~/analysis-s05/R/utils.R")
 library(cytoreason.ccm.pipeline)
-library(dplyr)
 library(tidyverse)
 
 # calculation is done on the disease model as we don't need the signatures
@@ -54,7 +53,7 @@ run_function_dist(FUN = function(ccm_wfid, submodel){
       return(list(projected = metaPCA.projected, metaPCA = metaPCA, training = pathways.train, keyPathways = keyPathways, perCollection = perCollection))
       
     })
-    names(allSubmodels) = c("bulk","adjusted__1__1")
+    names(allSubmodels) = c("bulk","adjusted__1__1","adjusted__1__CRCL_0000348")
     return(allSubmodels)
   })
   names(allKeyPathways) = unique(names(ccm$meta)[1:4])
@@ -94,7 +93,6 @@ keyPathways_wfid = "wf-ee9a8f05a7" # bulk
 keyPathways_wfid = "wf-98fc25d966" # adjusted
 keyPathways_wfid = "wf-0a6f338228" # all
 metaPCA_pathways = readRDS(get_workflow_outputs(keyPathways_wfid))
-
 
 
 ## Scores
@@ -149,7 +147,7 @@ sampleScores_all = lapply(names(metaPCA_pathways), function(term){
   }) %>% bind_rows()
 }) %>% bind_rows()
 # wf-e8f514f3f1
-
+# wf-5b90576980 - with keratinocytes
 pushToCC(sampleScores_all, tagsToPass = list(list(name="analysis",value="pathway_meta_pca")))
 
 
@@ -190,10 +188,18 @@ pathwayLoadings_all = lapply(names(metaPCA_pathways), function(term){
   }) %>% bind_rows()
 }) %>% bind_rows()
 
+pathwayLoadings_all = unique(pathwayLoadings_all)
 pathLoadings.BQ = pathwayLoadings_all %>%
   dplyr::select(-c(1:3))
 colnames(pathLoadings.BQ) = c("Pathway","PC","Loading","Term","Submodel","Collection")
 uploadToBQ(pathLoadings.BQ, bqdataset = "s05_atopic_dermatitis", tableName = "pathwayLoadings")
+
+
+## Per dataset pathway loadings
+## ------------------------------
+
+
+
 
 
 ## Visualization - pathway loadings
