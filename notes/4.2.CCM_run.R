@@ -197,7 +197,7 @@ ggsave("~/analysis-s05/figures/AD Model/molecularScore_condition.png", bg = "whi
 config = read.csv(get_task_inputs("wf-08a6a0a503","0", files_names_grepl_pattern = "ccm-metadata.csv"))
 config$asset_id[which(config$experiment_id == "GSE153007")] <- 'wf-2ac040bba1:0:GSE153007.RDS'
 config$asset_id[which(config$experiment_id == "GSE60709")] <- 'wf-923925db68:0:GSE60709.RDS'
-sample_ann = lapply(old_ccm$datasets, function(d){
+sample_ann = lapply(ccm$datasets, function(d){
   p = pData(assayDataExpression(d))
   if("week:ch1" %in% colnames(p)) {
     p[,"week:ch1"] = as.character(p[,"week:ch1"])
@@ -232,6 +232,9 @@ sample_ann = lapply(old_ccm$datasets, function(d){
   return(p)
 })
 sample_ann = bind_rows(sample_ann)
+config$ccm_annotate = "feature"
+
+ccm_stage_prepare_dataset_collection(config, annotate = list(sample_annotation_table = sample_ann))
 
 ccm_api_generate_ccm(config,
                      prepare_data = list(
@@ -244,5 +247,4 @@ ccm_api_generate_ccm(config,
                      model = .skip("cell_specific_differences"),
                      image = "master_1.0.1",
                      tags = list(tissue="skin", condition="AD", project="evo", analysis="test"))
-# generate_ccm -- Mon Dec 15 15:36:34 2025: wf-d4269d0681 []
-# generate_ccm -- Tue Dec 16 08:48:06 2025: wf-278ec7a19f []
+# generate_ccm -- Tue Dec 16 12:24:40 2025: wf-d9aec2329a []
