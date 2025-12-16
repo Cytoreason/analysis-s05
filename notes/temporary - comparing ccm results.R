@@ -145,3 +145,67 @@ ggplot(feature_rank, aes(x = original, y = new)) +
   theme_light() +
   theme(strip.text = element_text(color = "black")) +
   labs(color = NULL)
+
+
+
+## Comparing cell contributions
+## =======================================
+unified_metadata = readRDS(get_workflow_outputs("wf-e82a5ab3b6"))
+skin = read.csv("~/data/skin_modified.csv", header = F, sep = "\t")
+
+extract_contributions = function(ccm) {
+  lapply(ccm$datasets, function(d){
+      res = t(exprs(d$cell_contribution$eset))
+  }) %>% do.call(rbind,.)
+}
+
+old_contrib = extract_contributions(old_ccm) %>% data.frame(sample_id = rownames(.), check.names = F)
+  old_contrib = merge(unified_metadata[,c("sample_id","dataset_id_short","sample_classification","condition")], old_contrib, by = "sample_id")
+  old_contrib$version = "original"
+
+new_contrib = extract_contributions(new_ccm) %>% data.frame(sample_id = rownames(.))
+  colnames(new_contrib)[-22] = skin$V1[match(colnames(new_contrib)[-22], skin$V2)]
+  new_contrib = merge(unified_metadata[,c("sample_id","dataset_id_short","sample_classification","condition")], new_contrib, by = "sample_id")
+  new_contrib$version = "new"
+
+contributions = rbind(old_contrib, new_contrib)
+contrib_long = reshape2::melt(contributions, id.vars = c(1:4,26), variable.name = "cell", value.name = "contribution")
+contrib_long = reshape2::dcast(contrib_long, sample_id + dataset_id_short + sample_classification + condition + cell ~ version)
+
+stats = lapply(unique(contrib_long$cell), function(cell){
+  lapply(unique(contrib_long$dataset_id_short), function(dataset){
+    x = contrib_long[which(contrib_long$cell == cell & contrib_long$dataset_id_short == dataset),]
+    ct = cor.test(x$original, x$new, use = "paired.complete.obs", method = "pearson")
+    return(data.frame(dataset = dataset, cell = cell, cor = unname(ct$estimate), p = ct$p.value, row.names = NULL))
+  }) %>% bind_rows()
+}) %>% bind_rows()
+stats$label <- with(
+  stats,
+  sprintf("R = %.2f\np = %.2e", cor, p)
+)
+
+contrib_long = merge(contrib_long, stats, by.x = c("dataset_id_short","cell"), by.y = c("dataset","cell"))
+contrib_reduced = contrib_long[which(round(contrib_long$cor,2) < 0.95),]
+contrib_reduced$cell = as.character(contrib_reduced$cell)
+
+highlight = c("mature NK T cell" = "#bc5090","natural killer cell" = "#ff6361","T-helper 17 cell" = "#ffa600")
+
+ggplot(contrib_reduced, aes(x = original, y = new)) +
+  geom_smooth(method="lm", se=F, color = "grey") +
+  geom_point(aes(color = ifelse(cell %in% names(highlight),cell,"black"))) +
+  geom_text(check_overlap = T,
+    data = contrib_reduced, size = 3,
+    aes(label = label),
+    x = -Inf, y = Inf,          # corner of each facet
+    hjust = -0.1, vjust = 1.1,  # nudge inside the panel
+    inherit.aes = FALSE
+  ) +
+  ggh4x::facet_grid2(cols = vars(cell), rows = vars(dataset_id_short), scales = "free", independent = "all") +
+  scale_color_manual(values = highlight, na.value = "black")+
+  theme_light() +
+  theme(strip.text = element_text(color = "black")) +
+  labs(color = NULL, title = "Correlation between cell contributions between old and new CCM versions", 
+       subtitle = "filtered for pearson < 0.95")
+
+
+##

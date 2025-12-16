@@ -3,7 +3,7 @@ library(cytoreason.ccm.pipeline)
 library(tidyverse)
 
 # calculation is done on the disease model as we don't need the signatures
-ccm <- as_ccm_fit("wf-832ab799be")
+ccm <- as_ccm_fit("wf-08a6a0a503")
 
 ## Calculate key pathways PCA
 ## ==========================================

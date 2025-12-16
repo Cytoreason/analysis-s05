@@ -91,6 +91,21 @@ uploadToBQ <- function(table, bqdataset, tableName, subsetting = NULL, dispositi
 
 
 
+#' @title downloadFromBQ
+#' @description downloadFromBQ gets workflow IDs and uploads them to bigquery
+#' @param bqdataset - name of dataset in BQ we want to download from
+#' @param tableName - the table name we want extract from BQ
+downloadFromBQ <- function(bqdataset, tableName){
+  library(bigrquery)
+  
+  tbl <- bq_table("cytoreason", bqdataset, tableName)
+  
+  out <- tryCatch(
+    bq_table_download(tbl),
+    error = function(e) stop("BigQuery download failed: ", conditionMessage(e), call. = FALSE)
+  )
+  return(out)
+}
 
 
 # squash_axis for ggplot

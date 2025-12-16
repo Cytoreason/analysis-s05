@@ -119,6 +119,24 @@ for (x in names(ccm$datasets)){
 }
 
 
+# Additional pathways for phenoFeature
+# ======================================
+gs <- ccm_prepare_bio_entities("gene_set_collection")
+
+attributes(gs)$class = "list"
+
+GeneSetLists = FeaturesTable_annotated %>%
+  dplyr::filter(Collection %in% c("h","kegg","reactome","btm")) 
+
+
+GeneSetLists_list = split(GeneSetLists$Identifier,GeneSetLists$Collection)
+CollectionPathways = list()
+for (NAMEX in names(GeneSetLists_list)){
+  Extract = gs$gene_set_collection[[NAMEX]][unique(GeneSetLists_list[[NAMEX]])]
+  CollectionPathways[[NAMEX]] = Extract@.Data
+  names(CollectionPathways[[NAMEX]]) = Extract@names
+}
+
 
 ## General
 ## ------------------
@@ -171,3 +189,60 @@ ggplot(MS, aes(y = molecular_score, x = condition, fill = condition)) +
   labs(x = NULL, title = "New molecular score in AD model") +
   theme(legend.position = "none")
 ggsave("~/analysis-s05/figures/AD Model/molecularScore_condition.png", bg = "white")
+
+
+
+
+###################
+config = read.csv(get_task_inputs("wf-08a6a0a503","0", files_names_grepl_pattern = "ccm-metadata.csv"))
+config$asset_id[which(config$experiment_id == "GSE153007")] <- 'wf-2ac040bba1:0:GSE153007.RDS'
+config$asset_id[which(config$experiment_id == "GSE60709")] <- 'wf-923925db68:0:GSE60709.RDS'
+sample_ann = lapply(old_ccm$datasets, function(d){
+  p = pData(assayDataExpression(d))
+  if("week:ch1" %in% colnames(p)) {
+    p[,"week:ch1"] = as.character(p[,"week:ch1"])
+  }
+  if("Week" %in% colnames(p)) {
+    p[,"Week"] = as.character(p[,"Week"])
+  }
+  if("batch_date:ch1" %in% colnames(p)) {
+    p[,"batch_date:ch1"] = as.character(p[,"batch_date:ch1"])
+  }
+  if("Batch_date" %in% colnames(p)) {
+    p[,"Batch_date"] = as.character(p[,"Batch_date"])
+  }
+  if("channel_count" %in% colnames(p)) {
+    p[,"channel_count"] = as.character(p[,"channel_count"])
+  }
+  if("taxid_ch1" %in% colnames(p)) {
+    p[,"taxid_ch1"] = as.character(p[,"taxid_ch1"])
+  }
+  if("data_row_count" %in% colnames(p)) {
+    p[,"data_row_count"] = as.character(p[,"data_row_count"])
+  }
+  if("patient_id:ch1" %in% colnames(p)) {
+    p[,"patient_id:ch1"] = as.character(p[,"patient_id:ch1"])
+  }
+  if("Patient_id" %in% colnames(p)) {
+    p[,"Patient_id"] = as.character(p[,"Patient_id"])
+  }
+  if("description.1" %in% colnames(p)) {
+    p[,"description.1"] = as.character(p[,"description.1"])
+  }
+  return(p)
+})
+sample_ann = bind_rows(sample_ann)
+
+ccm_api_generate_ccm(config,
+                     prepare_data = list(
+                       annotate = list(
+                         sample_annotation_table = sample_ann
+                      )),
+                     qc = FALSE,
+                     term_metadata = FALSE, # fails for some reason
+                     adjustment_models = list("1" = list(c("meta1_pc1"), c("CRCL_0000348"),c("meta1_pc1","CRCL_0000348"))),
+                     model = .skip("cell_specific_differences"),
+                     image = "master_1.0.1",
+                     tags = list(tissue="skin", condition="AD", project="evo", analysis="test"))
+# generate_ccm -- Mon Dec 15 15:36:34 2025: wf-d4269d0681 []
+# generate_ccm -- Tue Dec 16 08:48:06 2025: wf-278ec7a19f []
