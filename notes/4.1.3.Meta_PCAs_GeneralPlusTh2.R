@@ -3,11 +3,16 @@ library(cytoreason.ccm.pipeline)
 library(tidyverse)
 
 # calculation is done on the disease model as we don't need the signatures
-ccm <- as_ccm_fit("wf-08a6a0a503")
+th2_enrichments = readRDS(get_workflow_outputs("wf-6f7bab48d9"))[1:2]
+th2_enrichments$th2 = lapply(th2_enrichments$th2, function(x) lapply(x, function(y) { y=y[-c(18:24),] ; return(y) }))
+th2_enrichments = lapply(th2_enrichments, function(x) purrr::transpose(x)) %>% purrr::transpose()
+th2_enrichments$exprs <- Map(rbind, th2_enrichments$exprs$th2, th2_enrichments$exprs$neuroinflammation)
+th2_enrichments$exprs_adjusted__1__1 <- Map(rbind, th2_enrichments$exprs_adjusted__1__1$th2, th2_enrichments$exprs_adjusted__1__1$neuroinflammation)
+
 
 ## Calculate key pathways PCA
 ## ==========================================
-run_function_dist(FUN = function(ccm_wfid){
+run_function_dist(FUN = function(ccm_wfid, th2_enrichments){
   library(cytoreason.ccm.pipeline)
   library(cytoreason.integration)
   library(dplyr)
@@ -16,10 +21,10 @@ run_function_dist(FUN = function(ccm_wfid){
   
   ccm = as_ccm_fit(ccm_wfid)
   config <- modelMetadata(ccm)
-  allKeyPathways = lapply(unique(names(ccm$meta)[1:4]), function(effect){
+  allKeyPathways = lapply(c("AD","L_vs_HC"), function(effect){
     allSubmodels = lapply(c("bulk","adjusted__1__1"), function(submodel){
       cat("\nComputing:",effect,submodel,"\n")
-      keyPathways <- build_service_result_tables(ccm$meta[[effect]]$gx_diff$gx_gsa) # we use DZ vs HC to keep track with cell meta pca
+      keyPathways <- build_service_result_tables(ccm$meta[[effect]]$gx_diff$gx_gsa)
       keyPathways <- keyPathways[[submodel]]$gsa_enrichment %>% .[c("h", "btm", "kegg", "reactome")]
       
       keyPathways = do.call(rbind, 
@@ -40,27 +45,27 @@ run_function_dist(FUN = function(ccm_wfid){
         library(cytoreason.ccm.pipeline)
         library(dplyr)
       })
-      clusterExport(cl, varlist = c("ccm","keyPathways"), envir = environment())
+      clusterExport(cl, varlist = c("ccm","keyPathways","submodel","th2_enrichments"), envir = environment())
       
       pathways <- parLapply(cl, ccm$datasets, function(d){
-        analysisResultExpressionSet(d, "gene_set_activity") %>%
+        x = analysisResultExpressionSet(d, "gene_set_activity") %>%
           .[keyPathways$ID,]
+        keep = ifelse(submodel == "bulk", "exprs", paste0("exprs_",submodel))
+        
+        new_exprs = rbind(assayData(x)[[keep]], th2_enrichments[[keep]][[x@experimentData@title]])
+        fd_new <- rbind(fData(x), as.data.frame(matrix(NA, nrow = nrow(th2_enrichments[[keep]][[x@experimentData@title]]), 
+                                                       ncol = ncol(fData(x)),
+                                                       dimnames = list(rownames(th2_enrichments[[keep]][[x@experimentData@title]]), colnames(fData(x))))))
+        
+        x2 <- ExpressionSet(
+          assayData   = new_exprs,
+          phenoData   = phenoData(x),
+          featureData = AnnotatedDataFrame(fd_new),
+          annotation  = annotation(x)
+        )
+        return(x2)
       })
       stopCluster(cl)
-      
-      # Choose the correct assay
-      keep = ifelse(submodel == "bulk", "exprs", paste0("exprs_",submodel))
-      
-      m <- lapply(pathways, function(x) assayDataElement(x, keep))
-      
-      # Replace assayData with ONLY that assay (same name preserved)
-      pathways = lapply(names(pathways), function(x) {
-        d = pathways[[x]]
-        assayData(d) <- do.call(assayDataNew, c(list("environment"), 
-                                                setNames(list(m[[x]]), "exprs")))
-        return(d)
-      })
-      names(pathways) = names(ccm$datasets)
       
       # Get the data for the meta-PCA train datasets (as defined in the config file):
       pathways.train <- pathways[config$dataset_id[which(config$ccm_meta_pca == 1)]]
@@ -70,41 +75,26 @@ run_function_dist(FUN = function(ccm_wfid){
       
       # Project the samples (all the datasets) on the meta PCA
       metaPCA.projected <- lapply(pathways, function(x) service_meta_pca_projection(x, meta_pca = metaPCA))
-      
-      # now per collection
-      cat("\nPer Collection\n")
-      perCollection = lapply(c("h","btm","kegg","reactome"), function(collection){
-        pathw = lapply(pathways, function(x) x[stringr::str_detect(rownames(x),paste0(collection,":"))])
-        pathways.train <- pathw[config$dataset_id[which(config$ccm_meta_pca == 1)]]
-        metaPCA <- service_meta_pca(data = pathways.train, n_pc = 3)
-        metaPCA.projected <- lapply(pathw, function(x) service_meta_pca_projection(x, meta_pca = metaPCA))
-        return(list(projected = metaPCA.projected, metaPCA = metaPCA, training = pathways.train, keyPathways = keyPathways))
-      })
-      names(perCollection) = c("h","btm","kegg","reactome")
-      
-      return(list(projected = metaPCA.projected, metaPCA = metaPCA, training = pathways.train, keyPathways = keyPathways, perCollection = perCollection))
-      
+
+      return(list(projected = metaPCA.projected, metaPCA = metaPCA, training = pathways.train, keyPathways = keyPathways))
     })
     names(allSubmodels) = c("bulk","adjusted__1__1")
     return(allSubmodels)
   })
-  names(allKeyPathways) = unique(names(ccm$meta)[1:4])
+  names(allKeyPathways) = c("AD","L_vs_HC")
   return(allKeyPathways)
 }, 
 ccm_wfid = "wf-08a6a0a503", # new disease model, including adjustment to keratinocytes
+th2_enrichments = th2_enrichments,
 image = "eu.gcr.io/cytoreason/ci-cytoreason.ccm.pipeline-package:develop_latest", 
-tags = list(list(name="analysis",value="pathway_metaPCA_allTerms")))
-# wf-ee9a8f05a7 - bulk
-# wf-98fc25d966 - adjusted
-# wf-0a6f338228 - all terms
-# wf-1b16e72f76 - all terms, fixed bulk/adjustment subsetting
+tags = list(list(name="analysis",value="pathway_metaPCA_allTerms_plusTh2")))
+# wf-113e6defe3
+
 
 
 ## Extraction
 ## ==========================================
-keyPathways_wfid = "wf-ee9a8f05a7" # bulk
-keyPathways_wfid = "wf-98fc25d966" # adjusted
-keyPathways_wfid = "wf-1b16e72f76" # all
+keyPathways_wfid = "wf-113e6defe3"
 metaPCA_pathways = readRDS(get_workflow_outputs(keyPathways_wfid))
 
 
@@ -126,11 +116,7 @@ extract_sampleScores = function(metaPCA.projected, flipPC1, flipPC2) {
 process = function(res, term, submodel, collection) {
   res$term = term
   res$submodel = submodel
-  if(!is.null(collection)){
-    res$collection = collection
-  } else {
-    res$collection = "all"
-  }
+  res$collection = "keyWithTh2"
   return(res)
 }
 
@@ -141,22 +127,13 @@ sampleScores_all = lapply(names(metaPCA_pathways), function(term){
     cat("\n", term, submodel,"\n")
     res = extract_sampleScores(metaPCA_pathways[[term]][[submodel]]$projected, T, T)
     res = process(res, term, submodel, collection = NULL)
-    res_perCollection = lapply(names(metaPCA_pathways[[term]][[submodel]][["perCollection"]]), function(collection){
-      cat("\r", term, submodel,"...",collection)
-      res_col = extract_sampleScores(metaPCA_pathways[[term]][[submodel]][["perCollection"]][[collection]]$projected, T, T)
-      res_col = process(res_col, term, submodel, collection)
-      return(res_col)
-    }) %>% bind_rows()
     cat("\r", term, submodel,"........done")
-    return(bind_rows(res, res_perCollection))
+    return(res)
   }) %>% bind_rows()
 }) %>% bind_rows()
-# wf-e8f514f3f1
-# wf-5b90576980 - with keratinocytes
 
-pushToCC(sampleScores_all, tagsToPass = list(list(name="analysis",value="pathway_meta_pca")))
-# wf-5b90576980
-# wf-39ae62c8d2
+pushToCC(sampleScores_all, tagsToPass = list(list(name="analysis",value="pathway_meta_pca_keyWithTh2")))
+# wf-6dba8d483f
 
 
 ## Pathway loadings
@@ -179,14 +156,8 @@ pathwayLoadings_all = lapply(names(metaPCA_pathways), function(term){
     flipPC2 = ifelse(submodel == "bulk", T, F)
     res = extract_pathwayLoadings(metaPCA_pathways[[term]][[submodel]]$metaPCA, T, flipPC2)
     res = process(res, term, submodel, collection = NULL)
-    res_perCollection = lapply(names(metaPCA_pathways[[term]][[submodel]][["perCollection"]]), function(collection){
-      cat("\r", term, submodel,"...",collection)
-      res_col = extract_pathwayLoadings(metaPCA_pathways[[term]][[submodel]][["perCollection"]][[collection]]$metaPCA, T, flipPC2)
-      res_col = process(res_col, submodel, term, collection)
-      return(res_col)
-    }) %>% bind_rows()
     cat("\r", term, submodel,"........done")
-    return(bind_rows(res, res_perCollection))
+    return(res)
   }) %>% bind_rows()
 }) %>% bind_rows()
 
@@ -194,10 +165,8 @@ pathwayLoadings_all = unique(pathwayLoadings_all)
 pathLoadings.BQ = pathwayLoadings_all %>%
   dplyr::select(-c(1:3))
 colnames(pathLoadings.BQ) = c("Pathway","PC","Loading","Term","Submodel","Collection")
-pathLoadings.BQ$Collection[which(pathLoadings.BQ$Collection == "all")] = paste0("Changed in ", pathLoadings.BQ$Term[which(pathLoadings.BQ$Collection == "all")])
-pushToCC(pathLoadings.BQ, tagsToPass = list(list(name="analysis",value="pathway_meta_pca_loadings")))
-# wf-c397bd39fd
-# wf-036d5cf85e
-uploadToBQ(pathLoadings.BQ, bqdataset = "s05_atopic_dermatitis", tableName = "pathwayLoadings")
+pushToCC(pathLoadings.BQ, tagsToPass = list(list(name="analysis",value="pathway_meta_pca_loadings_keyWithTh2")))
+# wf-454d12aa31
+uploadToBQ(pathLoadings.BQ, bqdataset = "s05_atopic_dermatitis", tableName = "pathwayLoadings", disposition = "WRITE_APPEND")
 
 

@@ -207,7 +207,9 @@ extract_sampleScores = function(res) {
 }
 
 sampleScores_bulk = lapply(metaPCs_bulk, extract_sampleScores)
+# wf-a7ac64d7d6
 sampleScores_adj = lapply(metaPCs_adj, extract_sampleScores)
+# wf-f76769a6b6
 
 
 # Extract pathway loadings
@@ -234,32 +236,27 @@ process = function(df, submodel, term, collection){
 }
 
 pathwayLoadings_bulk = lapply(names(pathwayLoadings_bulk), function(x) process(pathwayLoadings_bulk[[x]], "bulk", NA, x)) %>% do.call(rbind,.)
+# wf-9ba68682c9
 pathwayLoadings_adj = lapply(names(pathwayLoadings_adj), function(x) process(pathwayLoadings_adj[[x]], "bulk", NA, x)) %>% do.call(rbind,.)
+# wf-f8f692fcb9
 
 uploadToBQ(pathwayLoadings_bulk, bqdataset = "s05_atopic_dermatitis", tableName = "pathwayLoadings", disposition = "WRITE_APPEND")
 uploadToBQ(pathwayLoadings_adj, bqdataset = "s05_atopic_dermatitis", tableName = "pathwayLoadings", disposition = "WRITE_APPEND")
 
 
-## 6. Meta PCA - all pathways including Th2, neuroinflammation
-## ==============================================================
-th2 = readRDS(get_workflow_outputs("wf-410536ebd3"))
-  th2 = th2[-c(18:24)]
-neuro = readRDS(get_workflow_outputs("wf-4ce41a599a"))
 
 
-
-
-## 4. CCM Run incorporating the new pathways
-## ===================================================
-
-gene_set_limits <- setNames(replicate(length(criteria), c(1L, Inf), simplify = FALSE), names(criteria)) # Define gene set size per signature
-
-ccm_api_run_custom_gene_set_analysis(cytoreason.assets::AssetData("wf-08a6a0a503"), # when using AssetData it will pull relevant tags automatically, and makes the relationship traceable
-                                     custom_gene_set_collections = criteria,
-                                     model = list(gx_gsa = list(collection_size_limits = gene_set_limits)),
-                                     meta = list(gx_diff = list(collection_size_limits = gene_set_limits)),
-                                     submodel = c("bulk", "adjusted__1__1"),
-                                     image = "master_1.0.1",
-                                     tags = list(tissue="skin", condition="AD", project="evo", analysis="X2_V7_preliminary"),
-                                     data_access = "s05")
-# generate_ccm -- Tue Dec 16 10:36:56 2025: wf-b9a01a0366 []
+# ## 4. CCM Run incorporating the new pathways
+# ## ===================================================
+# 
+# gene_set_limits <- setNames(replicate(length(criteria), c(1L, Inf), simplify = FALSE), names(criteria)) # Define gene set size per signature
+# 
+# ccm_api_run_custom_gene_set_analysis(cytoreason.assets::AssetData("wf-08a6a0a503"), # when using AssetData it will pull relevant tags automatically, and makes the relationship traceable
+#                                      custom_gene_set_collections = criteria,
+#                                      model = list(gx_gsa = list(collection_size_limits = gene_set_limits)),
+#                                      meta = list(gx_diff = list(collection_size_limits = gene_set_limits)),
+#                                      submodel = c("bulk", "adjusted__1__1"),
+#                                      image = "master_1.0.1",
+#                                      tags = list(tissue="skin", condition="AD", project="evo", analysis="X2_V7_preliminary"),
+#                                      data_access = "s05")
+# # generate_ccm -- Tue Dec 16 10:36:56 2025: wf-b9a01a0366 []

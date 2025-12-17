@@ -2,15 +2,51 @@ devtools::load_all("~/analysis-s05/R/utils.R")
 library(cytoreason.ccm.pipeline)
 library(tidyverse)
 
-# 1. Inputs
-# -----------------------------
+## 1. Inputs
+## ================================
 ccm = as_ccm_fit("wf-08a6a0a503")
-signatures = readRDS(get_workflow_outputs("wf-d22894f90b"))
 ## removing the extra data set isn't feasible within the constraints of the project - need to re-run the disease model, causing compatibility issues
 
+# preparing the sample annotation table we will pass, and integrate MS/CS/pheno into it
+sample_ann = lapply(ccm$datasets, function(d){
+  p = pData(assayDataExpression(d))
+  if("week:ch1" %in% colnames(p)) {
+    p[,"week:ch1"] = as.character(p[,"week:ch1"])
+  }
+  if("Week" %in% colnames(p)) {
+    p[,"Week"] = as.character(p[,"Week"])
+  }
+  if("batch_date:ch1" %in% colnames(p)) {
+    p[,"batch_date:ch1"] = as.character(p[,"batch_date:ch1"])
+  }
+  if("Batch_date" %in% colnames(p)) {
+    p[,"Batch_date"] = as.character(p[,"Batch_date"])
+  }
+  if("channel_count" %in% colnames(p)) {
+    p[,"channel_count"] = as.character(p[,"channel_count"])
+  }
+  if("taxid_ch1" %in% colnames(p)) {
+    p[,"taxid_ch1"] = as.character(p[,"taxid_ch1"])
+  }
+  if("data_row_count" %in% colnames(p)) {
+    p[,"data_row_count"] = as.character(p[,"data_row_count"])
+  }
+  if("patient_id:ch1" %in% colnames(p)) {
+    p[,"patient_id:ch1"] = as.character(p[,"patient_id:ch1"])
+  }
+  if("Patient_id" %in% colnames(p)) {
+    p[,"Patient_id"] = as.character(p[,"Patient_id"])
+  }
+  if("description.1" %in% colnames(p)) {
+    p[,"description.1"] = as.character(p[,"description.1"])
+  }
+  return(p)
+})
+sample_ann = bind_rows(sample_ann)
 
-# 2. Molecular and clinical scores
-# ------------------------------------
+
+## 2. Integrate molecular score
+## ================================
 MS = readRDS(get_workflow_outputs("wf-db0c88cca6"))
 # calculated by the data science group https://cytoreason.atlassian.net/wiki/spaces/DSG/pages/4154261510/New+Molecular+Score+-+Documentation#Molecular-score-results-on-different-disease-models
 
@@ -20,60 +56,27 @@ MS = MS %>%
   mutate(condition = str_replace(condition, "control", "healthy")) %>%
   mutate(condition = factor(condition, ordered = T, levels = c("atopic dermatitis","contact dermatitis","psoriasis","healthy")))
 
+sample_ann$MolecularScore = MS$molecular_score[match(sample_ann$geo_accession, MS$geo_accession)]
 
-# 3. Unify SCORAD/EASI scores and change name of cell meta PCs
-# ----------------------------------------------------------------
-for (x in names(ccm$datasets)){
-  pDataset = pData(ccm$datasets[[x]])
-  if(x %in% c("GSE121212__GPL16791","GSE137430__rnaseq","GSE141570__GPL20301","GSE147424__GPL16791","GSE157194__GPL21290")) { 
-    samplename = "sample_id"
-  } else {
-    samplename = "geo_accession"
-  }
-  
-  # integrating molecular score
-  pDataset$MolecularScore <- MS$molecular_score[match(pDataset$geo_accession, MS$geo_accession)]
+pheno_vars = "MolecularScore"
+               
+## 3. Unify SCORAD/EASI scores
+## ================================
+sample_ann <- sample_ann %>% 
+  dplyr::select(-c("SCORAD","Scorad","easi:ch1")) %>% # redundant columns
+  dplyr::rename(SCORAD = "scorad:ch1")
 
-  if(x %in% c("GSE130588__GPL570","GSE27887__GPL570","GSE58558__GPL570")) { # there we have SCORAD
-    idx = which(str_detect(colnames(pDataset),"SCORAD|Scorad"))[1]
-    pDataset$SCORAD = as.numeric(pDataset[,idx])
-    rm(idx)
-  }
-  if(x %in% c("GSE130588__GPL570","GSE59294__GPL570")) { # there we have EASI
-    idx = which(str_detect(colnames(pDataset),"EASI"))[1]
-    pDataset$EASI = as.numeric(pDataset[,idx])
-    rm(idx)
-  }
-  
-  pData(ccm$datasets[[x]]) <- pDataset
-  rm(pDataset)
-}
+pheno_vars = c(pheno_vars, "SCORAD","EASI")
 
-
-## 4. Generating a model with keratinocytes as an adjustment model
-## and SCOARD/EASI/cell meta PCs standardized
-## --------------------------------------------------------------------
-ccm_api_generate_ccm(ccm,
-                     qc = FALSE,
-                     term_metadata = FALSE, # fails for some reason
-                     adjustment_models = list("1" = list(c("meta1_pc1"), c("CRCL_0000348"),c("meta1_pc1","CRCL_0000348"))),
-                     model = .skip("cell_specific_differences"),
-                     image = "master_1.0.1",
-                     tags = list(list(tissue="skin"),
-                                 list(condition="AD"),
-                                 list(project="evo"),
-                                 list(name="adjustment",value="keratinocyte_only")))
-# generate_ccm -- Tue Dec  9 07:25:54 2025: wf-832ab799be []
-
-new_ccm = as_ccm_fit("wf-832ab799be")
-
-
-# 5. Integrate with pathways meta pcs
-# ------------------------------------------
-pathwayPCs = readRDS(get_workflow_outputs("wf-e8f514f3f1"))
+## 4. Integrate with pathways meta pcs
+## ======================================
+# 4.1. All meta PCs
+# --------------------
+pathwayPCs = readRDS(get_workflow_outputs("wf-39ae62c8d2"))
 pathwayPCs = pathwayPCs %>%
+  dplyr::filter(collection == "all" & term %in% c("AD","L_vs_HC")) %>%
   mutate(term = ifelse(term == "AD", "DZ_vs_HC", term)) %>%
-  mutate(collection = ifelse(collection == "All","",collection))%>%
+  mutate(submodel = ifelse(submodel != "bulk", "adjusted", "bulk")) %>%
   mutate(suffix = paste0(term,"_",submodel,"_",collection)) %>%
   dplyr::select(-c(term:collection))
 
@@ -82,118 +85,115 @@ pathwayPCs = pathwayPCs %>%
   mutate(label = paste0(prefix,"_",suffix)) %>%
   dplyr::select(-c(suffix:prefix))
 
-pathwayPCs = reshape2::dcast(pathwayPCs, dataset + sample_id ~ label)
+pathwayPCs = reshape2::dcast(pathwayPCs, dataset + sample_id ~ label, value.var = "sampleScore")
+colnames(pathwayPCs) = str_replace(colnames(pathwayPCs),"_all","_key")
+
+sample_ann = merge(sample_ann, pathwayPCs, by.x = c("sample_id", "dataset_id"), by.y = c("sample_id", "dataset"), all = T)
+pheno_vars = c(pheno_vars, colnames(pathwayPCs[,-c(1:2)]))
+               
+# 4.2. Th2 meta PCs
+# ----------------------
+pathwayPCs_th2_bulk = readRDS(get_workflow_outputs("wf-a7ac64d7d6"))
+pathwayPCs_th2_bulk = lapply(names(pathwayPCs_th2_bulk), function(x) {
+  y = pathwayPCs_th2_bulk[[x]]
+  colnames(y) = c("sample_id",paste0("pathway_meta_pc",1:3))
+  colnames(y)[-1] = paste0(colnames(y)[-1],"_",x,"_bulk")
+  return(y)
+}) %>% purrr::reduce(., full_join, by = "sample_id")
+
+pathwayPCs_th2_adj = readRDS(get_workflow_outputs("wf-f76769a6b6"))
+pathwayPCs_th2_adj = lapply(names(pathwayPCs_th2_adj), function(x) {
+  y = pathwayPCs_th2_adj[[x]]
+  colnames(y) = c("sample_id",paste0("pathway_meta_pc",1:3))
+  colnames(y)[-1] = paste0(colnames(y)[-1],"_",x,"_adj")
+  return(y)
+}) %>% purrr::reduce(., full_join, by = "sample_id")
+
+sample_ann = merge(sample_ann, pathwayPCs_th2_bulk, by = "sample_id", all = T)
+sample_ann = merge(sample_ann, pathwayPCs_th2_adj, by = "sample_id", all = T)
+
+pheno_vars = c(pheno_vars, colnames(pathwayPCs_th2_bulk[,-1]), colnames(pathwayPCs_th2_adj[,-1]))
 
 
-for (x in names(ccm$datasets)){
-  pDataset = pData(ccm$datasets[[x]])
-  if(x %in% c("GSE121212__GPL16791","GSE137430__rnaseq","GSE141570__GPL20301","GSE147424__GPL16791","GSE157194__GPL21290")) { 
-    samplename = "sample_id"
-  } else {
-      samplename = "geo_accession"
-    }
-  
-  # integrating molecular score
-  pDataset$MolecularScore <- MS$molecular_score[match(pDataset$geo_accession, MS$geo_accession)]
-  
-  # cell meta PCs
-  colnames(pDataset) <- gsub("meta1_", "cell_meta_", colnames(pDataset))
-  pDataset$cell_meta_pc1 <- (-1) * pDataset$cell_meta_pc1 # flipped the sign of the cell meta-PC1 (because HC>DZ)
-  
-  # pathway meta PCs
-  pDataset = merge(pDataset, pathwayPCs[,-1], by.x = samplename, by.y = "sample_id")
-  
-  if(x %in% c("GSE130588__GPL570","GSE27887__GPL570","GSE58558__GPL570")) { # there we have SCORAD
-    idx = which(str_detect(colnames(pDataset),"SCORAD|Scorad"))[1]
-    pDataset$SCORAD = as.numeric(pDataset[,idx])
-    rm(idx)
-  }
-  if(x %in% c("GSE130588__GPL570","GSE59294__GPL570")) { # there we have EASI
-    idx = which(str_detect(colnames(pDataset),"EASI"))[1]
-    pDataset$EASI = as.numeric(pDataset[,idx])
-    rm(idx)
-  }
-  
-  pData(ccm$datasets[[x]]) <- pDataset
-  rm(pDataset)
-}
+# 4.3. Key + Th2 meta PCs
+# --------------------------
+pathwayPCs = readRDS(get_workflow_outputs("wf-6dba8d483f"))
+pathwayPCs = pathwayPCs %>%
+  mutate(term = ifelse(term == "AD", "DZ_vs_HC", term)) %>%
+  mutate(submodel = ifelse(submodel != "bulk", "adjusted", "bulk")) %>%
+  mutate(suffix = paste0(term,"_",submodel,"_",collection)) %>%
+  dplyr::select(-c(term:collection))
+
+pathwayPCs = reshape2::melt(pathwayPCs, id.vars = c(1,2,6), measured.vals = 3:5, variable.name = "prefix", value.name = "sampleScore")
+pathwayPCs = pathwayPCs %>%
+  mutate(label = paste0(prefix,"_",suffix)) %>%
+  dplyr::select(-c(suffix:prefix))
+
+pathwayPCs = reshape2::dcast(pathwayPCs, dataset + sample_id ~ label, value.var = "sampleScore")
+
+sample_ann = merge(sample_ann, pathwayPCs, by = "sample_id", all = T)
+pheno_vars = c(pheno_vars, colnames(pathwayPCs[,-c(1:2)]))
 
 
-# Additional pathways for phenoFeature
-# ======================================
-gs <- ccm_prepare_bio_entities("gene_set_collection")
+## 5. Custom gene sets
+## ============================
+signatures = readRDS(get_workflow_outputs("wf-d22894f90b"))[-3]
+th2 = list(th2 = readRDS(get_workflow_outputs("wf-410536ebd3")),
+           neuroinflammation = readRDS(get_workflow_outputs("wf-4ce41a599a")),
+           epidermis = readRDS(get_workflow_outputs("wf-d3b177cd82")))
+canonical = cytoreason.gx::load_gene_set_collections(collection = c("kegg","btm","reactome","h"))
+names(canonical) = c("KEGG","BTM","REACTOME","HALLMARK")
 
-attributes(gs)$class = "list"
+allSignatures = c(signatures, th2, canonical)
+allSignatures = lapply(allSignatures, function(x) lapply(x, unique))
 
-GeneSetLists = FeaturesTable_annotated %>%
-  dplyr::filter(Collection %in% c("h","kegg","reactome","btm")) 
-
-
-GeneSetLists_list = split(GeneSetLists$Identifier,GeneSetLists$Collection)
-CollectionPathways = list()
-for (NAMEX in names(GeneSetLists_list)){
-  Extract = gs$gene_set_collection[[NAMEX]][unique(GeneSetLists_list[[NAMEX]])]
-  CollectionPathways[[NAMEX]] = Extract@.Data
-  names(CollectionPathways[[NAMEX]]) = Extract@names
-}
-
-
-## General
-## ------------------
+## 6. Running the CCM
+## ===================================
 # Set gene-set size limit for ssgsea and GSEA for our custom gene lists:
-gene_set_limits <- setNames(replicate(length(signatures), c(1L, Inf), simplify = FALSE), names(signatures)) # Define gene set size per signature
-pheno_vars = c("MolecularScore","SCORAD","EASI", "cell_meta_pc1","cell_meta_pc2","cell_meta_pc3",
-               "pathway_meta_pc1","pathway_meta_pc2","pathway_meta_pc3",
-               "adj_pathway_meta_pc1","adj_pathway_meta_pc2","adj_pathway_meta_pc3")
+gene_set_limits <- setNames(replicate(length(allSignatures), c(1L, Inf), simplify = FALSE), names(allSignatures)) # Define gene set size per signature
 
-
-## Running the CCM
-## ----------------------
-ccm_api_run_custom_gene_set_analysis(ccm, # when using AssetData it will pull relevant tags automatically, and makes the relationship traceable
-                                     custom_gene_set_collections = signatures,
+ccm_api_run_custom_gene_set_analysis(cytoreason.assets::AssetData("wf-08a6a0a503") , # when using AssetData it will pull relevant tags automatically, and makes the relationship traceable
+                                     custom_gene_set_collections = allSignatures,
+                                     prepare_data = list(annotate = list(sample_annotation_table = sample_ann)),
+                                     # dataset2 = list(gene_set_activity = list(collection = c("h", "kegg", "reactome", "btm"))),
                                      model = list(gx_gsa = list(collection_size_limits = gene_set_limits),
                                                   pheno_feature_correlations = list(phenotypic_variables = pheno_vars)),
                                      meta = list(gx_diff = list(collection_size_limits = gene_set_limits)),
                                      submodel = c("bulk", "adjusted__1__1"),
                                      image = "master_1.0.1",
-                                     tags = list(list(tissue="skin"),
-                                                 list(condition="AD"),
-                                                 list(project="evo"),
-                                                 list(name="analysis",value="X2_V6")),
+                                     tags = list(tissue="skin", condition="AD", project="evo", analysis = "X2_V7"),
                                      data_access = "s05")
 # generate_ccm -- Mon Nov 24 19:05:53 2025: wf-ef57aebb52 [] - without adj pathway meta
 # generate_ccm -- Tue Nov 25 09:47:02 2025: wf-8e948630d7 []
-
-
-## Visualization
-## ==============================
-ggplot(MS, aes(y = molecular_score, x = sample_classification, fill = sample_classification)) +
-  geom_violin(draw_quantiles = T) +
-  ggpubr::stat_compare_means(method = "wilcox", comparisons = list(c("Lesion","Non Lesion"),c("Non Lesion","Normal"),c("Lesion","Normal")), paired = F) +
-  scale_fill_manual(values = c("#473472","#53629E","#87BAC3"))+
-  theme_minimal()+
-  theme(legend.position = "none")+
-  labs(x = NULL, title = "New molecular score in AD model")
-ggsave("~/analysis-s05/figures/AD Model/molecularScore_sampleClassification.png", bg = "white")
-
-ggplot(MS, aes(y = molecular_score, x = condition, fill = condition)) +
-  geom_violin(draw_quantiles = T) +
-  ggpubr::stat_compare_means(method = "wilcox", comparisons = list(c("atopic dermatitis","contact dermatitis"),
-                                                                   c("contact dermatitis","psoriasis"),
-                                                                   c("psoriasis","healthy"),
-                                                                   c("atopic dermatitis","psoriasis"),
-                                                                   c("contact dermatitis","healthy"),
-                                                                   c("atopic dermatitis","healthy")), paired = F) +
-  scale_fill_manual(values = c("#473472","#53629E","#87BAC3","#D6F4ED"))+
-  theme_minimal()+
-  labs(x = NULL, title = "New molecular score in AD model") +
-  theme(legend.position = "none")
-ggsave("~/analysis-s05/figures/AD Model/molecularScore_condition.png", bg = "white")
+# generate_ccm -- Wed Dec 17 05:24:53 2025: wf-30b44d3c6f [] - some tasks failed. integration of many meta PCs incl. Th2
+# generate_ccm -- Wed Dec 17 06:46:13 2025: wf-7a1de0e6fd []
 
 
 
+## 6. Running the CCM with skin_v13
+## ===================================
+# In this part, we use a hybrid skin signature that includes mast cells, basophils and ILC2 from lung_v4
+# in order to mitigate some concerns by the client that we are not capturing type 2 immunity
 
-###################
+ccm_api_run_custom_gene_set_analysis(cytoreason.assets::AssetData("wf-08a6a0a503") , # when using AssetData it will pull relevant tags automatically, and makes the relationship traceable
+                                     custom_gene_set_collections = allSignatures,
+                                     prepare_data = list(annotate = list(sample_annotation_table = sample_ann)),
+                                     dataset = list(cell_contribution = list(signature_collection = "skin_v13:SUP-6496-skin_v13"),
+                                                    services = .skip("feature_pca")),
+                                     dataset2 = list(gene_set_activity = list(collection = c("h", "kegg", "reactome", "btm"))),
+                                     model = list(services = .skip("gene_cell_correlations","gene_set_activity_differences","cell_specific_differences"),
+                                                  pheno_feature_correlations = list(phenotypic_variables = pheno_vars)),
+                                     meta = list(gx_diff = list(collection_size_limits = gene_set_limits),
+                                                 services = .skip("gene_cell_correlations")),
+                                     submodel = c("bulk", "adjusted__1__1"),
+                                     image = "master_1.0.1",
+                                     tags = list(tissue="skin", condition="AD", project="evo", analysis = "X2_V7_skin_v13"),
+                                     data_access = "s05")
+# generate_ccm -- Wed Dec 17 10:40:59 2025: wf-9333bc9f8e []
+
+
+
+################### Testing with Renaud and Matan
 config = read.csv(get_task_inputs("wf-08a6a0a503","0", files_names_grepl_pattern = "ccm-metadata.csv"))
 config$asset_id[which(config$experiment_id == "GSE153007")] <- 'wf-2ac040bba1:0:GSE153007.RDS'
 config$asset_id[which(config$experiment_id == "GSE60709")] <- 'wf-923925db68:0:GSE60709.RDS'
@@ -237,10 +237,7 @@ config$ccm_annotate = "feature"
 ccm_stage_prepare_dataset_collection(config, annotate = list(sample_annotation_table = sample_ann))
 
 ccm_api_generate_ccm(config,
-                     prepare_data = list(
-                       annotate = list(
-                         sample_annotation_table = sample_ann
-                      )),
+                     prepare_data = list(annotate = list(sample_annotation_table = sample_ann)),
                      qc = FALSE,
                      term_metadata = FALSE, # fails for some reason
                      adjustment_models = list("1" = list(c("meta1_pc1"), c("CRCL_0000348"),c("meta1_pc1","CRCL_0000348"))),

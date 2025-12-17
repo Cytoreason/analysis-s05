@@ -155,3 +155,33 @@ cells_ws_filter = cells_ws %>%
 uploadToBQ(cells_ws_filter, bqdataset = "s05_atopic_dermatitis", tableName = "whiteSpace_cells")
 pushToCC(cells_ws_filter, tagsToPass = list(list(name="object",value="cells_ws_filtered")))
 # wf-7b6f3f86f7
+
+
+
+# 1. Dupi pathway white space - gx_diff
+# ==============================================
+# 1.1. Extract data
+# ------------------------
+run_function_dist(FUN = function(ccm_wfid, wantedTerms){
+  library(cytoreason.ccm.pipeline)
+  
+  ccm = as_ccm_fit(ccm_wfid)
+  
+  Treatments = lapply(unique(wantedTerms$data_set), function(datasetID){
+    res=lapply(unique(wantedTerms$model[which(wantedTerms$data_set == datasetID)]), function(model){
+      cat("\n",datasetID,model,"\n")
+      terms = unique(wantedTerms$Terms[which(wantedTerms$data_set == datasetID & wantedTerms$model == model)])
+      res = statistic_table(analysisResultElement(ccm$datasets[[datasetID]]$model[[model]],"gx_diff"),
+                            submodel = c("bulk","adjusted__1__1"), term = terms)
+    })
+    names(res) = unique(wantedTerms$model[which(wantedTerms$data_set == datasetID)])
+    return(res)
+  })
+  names(Treatments) = unique(wantedTerms$data_set)
+  return(Treatments)
+},
+ccm_wfid = "wf-08a6a0a503",
+wantedTerms = wantedTerms,
+memory_request = "5Gi",
+image = "eu.gcr.io/cytoreason/ci-cytoreason.ccm.pipeline-package:master_latest")
+# wf-956d786801

@@ -3,7 +3,8 @@ library(cytoreason.ccm.pipeline)
 library(tidyverse)
 
 old_ccm = as_ccm_fit("wf-08a6a0a503")
-new_ccm = as_ccm_fit("wf-832ab799be")
+# new_ccm = as_ccm_fit("wf-832ab799be")
+new_ccm = as_ccm_fit("wf-d9aec2329a")
 
 
 ## ct_test per dataset
@@ -19,7 +20,7 @@ extract_ct_test = function(ccm) {
 ct_test_old = extract_ct_test(old_ccm)
   ct_test_old$wfid = "wf-08a6a0a503"
 ct_test_new = extract_ct_test(new_ccm)
-  ct_test_new$wfid = "wf-832ab799be"
+  ct_test_new$wfid = "wf-d9aec2329a"
   colnames(ct_test_new)[9] = "FDR"
 
 ct_tests = bind_rows(ct_test_old, ct_test_new)
