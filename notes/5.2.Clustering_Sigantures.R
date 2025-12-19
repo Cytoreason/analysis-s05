@@ -19,6 +19,11 @@ clusterTargets = function(res, plotSuffix) {
   dend = dendro_data(as.dendrogram(clust), type = "rectangle")
   d = ggdendrogram(dend, theme_dendro = T)
   ggsave(plot = d, paste0("~/analysis-s05/figures/Results/clusteringDendrogram_",plotSuffix,".png"), width = 10, height = 4, bg = "white")
+  
+  # optional - vertical
+  d = ggdendrogram(dend, theme_dendro = T, rotate = T)
+  ggsave(plot = d, paste0("~/analysis-s05/figures/Results/clusteringDendrogram_vertical_",plotSuffix,".png"), width = 10, height = 4, bg = "white")
+  
 }
 
 

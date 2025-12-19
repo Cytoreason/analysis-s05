@@ -141,36 +141,49 @@ signatures = readRDS(get_workflow_outputs("wf-d22894f90b"))[-3]
 th2 = list(th2 = readRDS(get_workflow_outputs("wf-410536ebd3")),
            neuroinflammation = readRDS(get_workflow_outputs("wf-4ce41a599a")),
            epidermis = readRDS(get_workflow_outputs("wf-d3b177cd82")))
-canonical = cytoreason.gx::load_gene_set_collections(collection = c("kegg","btm","reactome","h"))
-names(canonical) = c("KEGG","BTM","REACTOME","HALLMARK")
 
-allSignatures = c(signatures, th2, canonical)
+allSignatures = c(signatures, th2)
 allSignatures = lapply(allSignatures, function(x) lapply(x, unique))
 
-## 6. Running the CCM
+# 
+# ## 6. Add canonical pathways to phenoFeature
+# ## ===================================================
+# canonical = cytoreason.gx::load_gene_set_collections(collection = c("kegg","btm","reactome","h"))
+# names(canonical) = c("KEGG","BTM","REACTOME","HALLMARK")
+
+## 6. Add all phenoFeatures to the CCM object (I tried using sample_annotation_table but it didn't work)
+## ===========================================================================================================
+
+
+
+## 7. Running the CCM
 ## ===================================
 # Set gene-set size limit for ssgsea and GSEA for our custom gene lists:
 gene_set_limits <- setNames(replicate(length(allSignatures), c(1L, Inf), simplify = FALSE), names(allSignatures)) # Define gene set size per signature
 
+IMAGE <- ccm_cyto_cc_image(image = "master_1.0.1",
+                           "model/feature_geneset_correlations" = "[100Gi]")
+
 ccm_api_run_custom_gene_set_analysis(cytoreason.assets::AssetData("wf-08a6a0a503") , # when using AssetData it will pull relevant tags automatically, and makes the relationship traceable
                                      custom_gene_set_collections = allSignatures,
                                      prepare_data = list(annotate = list(sample_annotation_table = sample_ann)),
-                                     # dataset2 = list(gene_set_activity = list(collection = c("h", "kegg", "reactome", "btm"))),
+                                     dataset2 = list(gene_set_activity = list(collection = c("h", "kegg", "reactome", "btm"))),
                                      model = list(gx_gsa = list(collection_size_limits = gene_set_limits),
                                                   pheno_feature_correlations = list(phenotypic_variables = pheno_vars)),
                                      meta = list(gx_diff = list(collection_size_limits = gene_set_limits)),
                                      submodel = c("bulk", "adjusted__1__1"),
-                                     image = "master_1.0.1",
+                                     image = IMAGE,
+                                     workflow_overrides=list(activeDeadlineSeconds=172800),
                                      tags = list(tissue="skin", condition="AD", project="evo", analysis = "X2_V7"),
                                      data_access = "s05")
 # generate_ccm -- Mon Nov 24 19:05:53 2025: wf-ef57aebb52 [] - without adj pathway meta
 # generate_ccm -- Tue Nov 25 09:47:02 2025: wf-8e948630d7 []
 # generate_ccm -- Wed Dec 17 05:24:53 2025: wf-30b44d3c6f [] - some tasks failed. integration of many meta PCs incl. Th2
-# generate_ccm -- Wed Dec 17 06:46:13 2025: wf-7a1de0e6fd []
+# generate_ccm -- Thu Dec 18 10:53:58 2025: wf-4ac16e6903 [] - sample_annotation_table, didn't work
+# generate_ccm -- Thu Dec 18 11:06:02 2025: wf-3a2dc09ccc [] - workflow_overrides=list(activeDeadlineSeconds=172800) - sample_annotation_table, didn't work
 
 
-
-## 6. Running the CCM with skin_v13
+## 7. Running the CCM with skin_v13
 ## ===================================
 # In this part, we use a hybrid skin signature that includes mast cells, basophils and ILC2 from lung_v4
 # in order to mitigate some concerns by the client that we are not capturing type 2 immunity
@@ -186,11 +199,57 @@ ccm_api_run_custom_gene_set_analysis(cytoreason.assets::AssetData("wf-08a6a0a503
                                      meta = list(gx_diff = list(collection_size_limits = gene_set_limits),
                                                  services = .skip("gene_cell_correlations")),
                                      submodel = c("bulk", "adjusted__1__1"),
+                                     workflow_overrides=list(activeDeadlineSeconds=172800),
                                      image = "master_1.0.1",
                                      tags = list(tissue="skin", condition="AD", project="evo", analysis = "X2_V7_skin_v13"),
                                      data_access = "s05")
-# generate_ccm -- Wed Dec 17 10:40:59 2025: wf-9333bc9f8e []
+# generate_ccm -- Thu Dec 18 15:52:10 2025: wf-a88918a66c []
 
+
+## 7. Only correlations to SCORAD
+## ===================================
+# Pull the config
+config = read.csv(get_task_inputs("wf-08a6a0a503","0", files_names_grepl_pattern = "ccm-metadata.csv"))
+
+# Pull the sample annotation
+sample_ann = readRDS(get_task_inputs("wf-7a1de0e6fd","0",files_names_grepl_pattern = "parameters"))
+sample_ann = sample_ann$prepare_data$annotate$sample_annotation_table
+
+# Change the config to calculate the wanted correlation
+scorad = unique(sample_ann$experiment_id[which(!is.na(sample_ann$SCORAD))])
+
+config = config[which(config$experiment_id %in% scorad & config$effect_id == "L_vs_NL"),]
+config$model_pairing[1] = "Subject.Id"
+config$ccm_exclude = NA
+config$dataset_id = paste0(config$experiment_id, "__", config$platform_id)
+config$comparison_id = paste0("L_vs_NL__",config$dataset_id,"__Lesion_vs_non_lesion")
+config$ccm_meta_pca = NA
+
+# signatures
+signatures = readRDS(get_workflow_outputs("wf-d22894f90b"))[-3]
+th2 = list(th2 = readRDS(get_workflow_outputs("wf-410536ebd3")),
+           neuroinflammation = readRDS(get_workflow_outputs("wf-4ce41a599a")),
+           epidermis = readRDS(get_workflow_outputs("wf-d3b177cd82")))
+th2$th2$McCluskey = unique(th2$th2$McCluskey)
+allSignatures = c(signatures, th2)
+
+ccm_stage_prepare_dataset_collection(config, annotate = list(sample_annotation_table = sample_ann))
+
+gene_set_limits <- setNames(replicate(length(allSignatures), c(1L, Inf), simplify = FALSE), names(allSignatures)) # Define gene set size per signature
+
+ccm_api_run_custom_gene_set_analysis(config, 
+                                     custom_gene_set_collections = allSignatures,
+                                     prepare_data = list(annotate = list(sample_annotation_table = sample_ann)),
+                                     multi = list(services = .skip("meta_pca")),
+                                     dataset2 = list(services=c("adjust_data","gene_set_activity","annotate")),
+                                     model = list(services = c("pheno_feature_correlations"),
+                                                  pheno_feature_correlations = list(phenotypic_variables = "SCORAD")),
+                                     meta = list(services = "pheno_feature_correlations"),
+                                     image = "master_1.0.1",
+                                     tags = list(tissue="skin", condition="AD", project="evo", analysis = "SCORAD_meta_correlation"),
+                                     data_access = "s05")
+# generate_ccm -- Wed Dec 17 15:44:45 2025: wf-0e2c39f807 [] - succeeded but no meta :(
+# generate_ccm -- Thu Dec 18 14:05:23 2025: wf-47f31aef48 []
 
 
 ################### Testing with Renaud and Matan

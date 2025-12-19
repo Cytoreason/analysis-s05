@@ -27,7 +27,7 @@ run_function_dist(FUN = function(ccm_wfid, wantedTerms){
   names(Treatments) = unique(wantedTerms$data_set)
   return(Treatments)
 },
-ccm_wfid = "wf-08a6a0a503",
+ccm_wfid = "wf-8e948630d7",
 wantedTerms = wantedTerms,
 memory_request = "5Gi",
 image = "eu.gcr.io/cytoreason/ci-cytoreason.ccm.pipeline-package:master_latest")
@@ -36,50 +36,65 @@ image = "eu.gcr.io/cytoreason/ci-cytoreason.ccm.pipeline-package:master_latest")
 Treatment_path = readRDS(get_workflow_outputs("wf-ca1574909f"))
 Treatment_path = lapply(names(Treatment_path), function(x) {
   y = bind_rows(Treatment_path[[x]]) %>%
-    dplyr::filter(collection %in% c("h","kegg","reactome"))
+    dplyr::filter(collection %in% c("h","kegg","reactome","btm"))
   y$dataset = x
   return(y)
 }) %>% bind_rows()
 
 uploadToBQ(Treatment_path, bqdataset = "s05_atopic_dermatitis", tableName = "treatment_PrePostDupi")
 pushToCC(Treatment_path, tagsToPass = list(list(name="object",value="treatment_PrePostDupi")))
-# wf-eb2ac52a50
+# wf-88d79c9c27
 
 # 1.2. Define white space
 # ---------------------------
 pathways_in_dz = downloadFromBQ(bqdataset = "s05_atopic_dermatitis", tableName = "AD_gx_gsa")
 pathways_in_dz = pathways_in_dz %>%
   group_by(term, submodel) %>%
-  dplyr::filter(submodel %in% c("bulk","adjusted__1__1") & collection %in% c("h","kegg","reactome")) %>%
+  dplyr::filter(submodel %in% c("bulk","adjusted__1__1") & collection %in% c("h","kegg","reactome","btm")) %>%
   dplyr::select(term, submodel, collection, pathway, NES, FDR, log10_fdr) %>%
-  mutate(dir = ifelse(FDR > 0.05, "unchanged_in_dz",
-                      ifelse(NES >0, "up_in_dz","down_in_dz"))) %>%
-  dplyr::rename(term_disease = term) %>%
+  mutate(dir = ifelse(FDR > 0.05, "unchanged",
+                      ifelse(NES >0, "up","down"))) %>%
   ungroup()
   
+dz_wide = pathways_in_dz %>%
+  pivot_wider(id_cols = c(pathway,collection, submodel),
+              names_from  = term,
+              values_from = dir)
 
-pathway_ws = Treatment_path %>%
+pathway_treatment = Treatment_path %>%
   group_by(dataset, term, submodel) %>%
-  dplyr::filter(str_detect(term,"Dupilumab") & collection %in% c("h","kegg","reactome")) %>%
+  dplyr::filter(str_detect(term,"Dupilumab") & collection %in% c("h","kegg","reactome","btm")) %>%
   dplyr::select(dataset, term, submodel, collection, pathway, NES, FDR, log10_fdr) %>%
-  mutate(dir = ifelse(FDR > 0.05, "unchanged_in_dupi",
-                      ifelse(NES >0, "up_in_dupi","down_in_dupi"))) %>%
   mutate(term = as.character(term)) %>%
-  dplyr::rename(term_treatment = term) %>%
   ungroup()
 
 
-pathways_ws = merge(pathways_in_dz, pathway_ws, by = c("submodel","collection","pathway"), suffix = c("_disease","_treatment"))
-pushToCC(pathways_ws, tagsToPass = list(list(name="object",value="pathways_ws_all")))
-# wf-152a08ff2d
+pathway_space = merge(pathway_treatment, dz_wide, all = T)
+pathway_space = pathway_space %>%
+  mutate(in_white_space_L_vs_NL = case_when(NES > 0 & L_vs_NL == "up" ~ "yesUp",
+                                            NES < 0 & FDR > 0.05 & L_vs_NL == "up" ~ "yesUp",
+                                            NES < 0 & L_vs_NL == "down" ~ "yesDown",
+                                            NES > 0 & FDR > 0.05 & L_vs_NL == "down" ~ "yesDown",
+                                            .default = "no")) %>%
+  mutate(in_white_space_L_vs_HC = case_when(NES > 0 & L_vs_HC == "up" ~ "yesUp",
+                                            NES < 0 & FDR > 0.05 & L_vs_HC == "up" ~ "yesUp",
+                                            NES < 0 & L_vs_HC == "down" ~ "yesDown",
+                                            NES > 0 & FDR > 0.05 & L_vs_HC == "down" ~ "yesDown",
+                                            .default = "no")) %>%
+  mutate(in_white_space_NL_vs_HC = case_when(NES > 0 & NL_vs_HC == "up" ~ "yesUp",
+                                             NES < 0 & FDR > 0.05 & NL_vs_HC == "up" ~ "yesUp",
+                                             NES < 0 & NL_vs_HC == "down" ~ "yesDown",
+                                             NES > 0 & FDR > 0.05 & NL_vs_HC == "down" ~ "yesDown",
+                                             .default = "no")) %>%
+  mutate(in_white_space_DZ_vs_HC = case_when(NES > 0 & DZ_vs_HC == "up" ~ "yesUp",
+                                             NES < 0 & FDR > 0.05 & DZ_vs_HC == "up" ~ "yesUp",
+                                             NES < 0 & DZ_vs_HC == "down" ~ "yesDown",
+                                             NES > 0 & FDR > 0.05 & DZ_vs_HC == "down" ~ "yesDown",
+                                             .default = "no")) 
 
-pathways_ws_filter = pathways_ws %>%
-  dplyr::filter(dir_disease != "unchanged_in_dz" & dir_treatment == "unchanged_in_dupi") %>%
-  dplyr::filter(term_treatment %in% c("W16_vs_W0:DupilumabL","W12_vs_W0:DupilumabL","W4_vs_W0:DupilumabL"))
-
+pushToCC(pathway_space, tagsToPass = list(list(name="object",value="pathways_ws_all")))
+# wf-8fc42d8d1b
 uploadToBQ(pathways_ws_filter, bqdataset = "s05_atopic_dermatitis", tableName = "whiteSpace_pathways")
-pushToCC(pathways_ws_filter, tagsToPass = list(list(name="object",value="pathways_ws_filter")))
-# wf-84f066601f
 
 
 
@@ -126,35 +141,52 @@ cells_in_dz = downloadFromBQ(bqdataset = "s05_atopic_dermatitis", tableName = "A
 cells_in_dz = cells_in_dz %>%
   group_by(term) %>%
   dplyr::select(term, feature_id, estimate, fdr) %>%
-  mutate(dir = ifelse(fdr > 0.05, "unchanged_in_dz",
-                      ifelse(estimate >0, "up_in_dz","down_in_dz"))) %>%
+  mutate(dir = ifelse(fdr > 0.05, "unchanged",
+                      ifelse(estimate >0, "up","down"))) %>%
   mutate(log10_fdr = -log10(fdr)) %>%
-  dplyr::rename(term_disease = term, cell = feature_id) %>%
+  dplyr::rename(cell = feature_id) %>%
   ungroup()
 
+dz_wide = cells_in_dz %>%
+  pivot_wider(id_cols = cell,
+              names_from  = term,
+              values_from = dir)
 
-cells_ws_all = Treatment_cells %>%
+cells_treatment = Treatment_cells %>%
   group_by(dataset, term) %>%
   dplyr::filter(str_detect(term,"Dupilumab")) %>%
   dplyr::select(dataset, term, feature_id, estimate, FDR, log10_fdr) %>%
-  mutate(dir = ifelse(FDR > 0.05, "unchanged_in_dupi",
-                      ifelse(estimate >0, "up_in_dupi","down_in_dupi"))) %>%
   mutate(term = as.character(term)) %>%
-  dplyr::rename(term_treatment = term, cell = feature_id) %>%
+  dplyr::rename(cell = feature_id) %>%
   ungroup()
 
 
-cells_ws = merge(cells_in_dz, cells_ws_all, by = c("cell"), suffix = c("_disease","_treatment"))
-pushToCC(cells_ws, tagsToPass = list(list(name="object",value="cells_ws_all")))
-# wf-2e7a260c22
+cells_space = merge(cells_treatment, dz_wide, by = "cell", all = T)
+cells_space = pathway_space %>%
+  mutate(in_white_space_L_vs_NL = case_when(NES > 0 & L_vs_NL == "up" ~ "yesUp",
+                                            NES < 0 & FDR > 0.05 & L_vs_NL == "up" ~ "yesUp",
+                                            NES < 0 & L_vs_NL == "down" ~ "yesDown",
+                                            NES > 0 & FDR > 0.05 & L_vs_NL == "down" ~ "yesDown",
+                                            .default = "no")) %>%
+  mutate(in_white_space_L_vs_HC = case_when(NES > 0 & L_vs_HC == "up" ~ "yesUp",
+                                            NES < 0 & FDR > 0.05 & L_vs_HC == "up" ~ "yesUp",
+                                            NES < 0 & L_vs_HC == "down" ~ "yesDown",
+                                            NES > 0 & FDR > 0.05 & L_vs_HC == "down" ~ "yesDown",
+                                            .default = "no")) %>%
+  mutate(in_white_space_NL_vs_HC = case_when(NES > 0 & NL_vs_HC == "up" ~ "yesUp",
+                                             NES < 0 & FDR > 0.05 & NL_vs_HC == "up" ~ "yesUp",
+                                             NES < 0 & NL_vs_HC == "down" ~ "yesDown",
+                                             NES > 0 & FDR > 0.05 & NL_vs_HC == "down" ~ "yesDown",
+                                             .default = "no")) %>%
+  mutate(in_white_space_DZ_vs_HC = case_when(NES > 0 & DZ_vs_HC == "up" ~ "yesUp",
+                                             NES < 0 & FDR > 0.05 & DZ_vs_HC == "up" ~ "yesUp",
+                                             NES < 0 & DZ_vs_HC == "down" ~ "yesDown",
+                                             NES > 0 & FDR > 0.05 & DZ_vs_HC == "down" ~ "yesDown",
+                                             .default = "no")) 
 
-cells_ws_filter = cells_ws %>%
-  dplyr::filter(dir_disease != "unchanged_in_dz" & dir_treatment == "unchanged_in_dupi") %>%
-  dplyr::filter(term_treatment %in% c("W16_vs_W0:DupilumabL","W12_vs_W0:DupilumabL","W4_vs_W0:DupilumabL"))
-
-uploadToBQ(cells_ws_filter, bqdataset = "s05_atopic_dermatitis", tableName = "whiteSpace_cells")
-pushToCC(cells_ws_filter, tagsToPass = list(list(name="object",value="cells_ws_filtered")))
-# wf-7b6f3f86f7
+uploadToBQ(cells_space, bqdataset = "s05_atopic_dermatitis", tableName = "whiteSpace_cells")
+pushToCC(cells_space, tagsToPass = list(list(name="object",value="cells_space")))
+# wf-82b0b996ed
 
 
 
@@ -170,9 +202,8 @@ run_function_dist(FUN = function(ccm_wfid, wantedTerms){
   Treatments = lapply(unique(wantedTerms$data_set), function(datasetID){
     res=lapply(unique(wantedTerms$model[which(wantedTerms$data_set == datasetID)]), function(model){
       cat("\n",datasetID,model,"\n")
-      terms = unique(wantedTerms$Terms[which(wantedTerms$data_set == datasetID & wantedTerms$model == model)])
       res = statistic_table(analysisResultElement(ccm$datasets[[datasetID]]$model[[model]],"gx_diff"),
-                            submodel = c("bulk","adjusted__1__1"), term = terms)
+                            submodel = c("bulk","adjusted__1__1"))
     })
     names(res) = unique(wantedTerms$model[which(wantedTerms$data_set == datasetID)])
     return(res)
@@ -184,4 +215,61 @@ ccm_wfid = "wf-08a6a0a503",
 wantedTerms = wantedTerms,
 memory_request = "5Gi",
 image = "eu.gcr.io/cytoreason/ci-cytoreason.ccm.pipeline-package:master_latest")
-# wf-956d786801
+# wf-0ca32e1ef5
+
+Treatment_genes = readRDS(get_workflow_outputs("wf-0ca32e1ef5"))
+Treatment_genes = lapply(names(Treatment_genes), function(x) {
+  lapply(Treatment_genes[[x]], function(y){
+    y = y[which(y$term %in% wantedTerms$Terms),]
+    y$dataset = x
+    return(y)
+  }) %>% bind_rows()
+}) %>% bind_rows()
+
+ccm = as_ccm_fit("wf-08a6a0a503")
+dz = rbind(statistic_table(ccm$meta$L_vs_NL$gx_diff$gx_diff),
+           statistic_table(ccm$meta$AD$gx_diff$gx_diff),
+           statistic_table(ccm$meta$L_vs_HC$gx_diff$gx_diff),
+           statistic_table(ccm$meta$NL_vs_HC$gx_diff$gx_diff)) %>%
+  dplyr::filter(term %in% c("L_vs_NL","L_vs_HC","NL_vs_HC","DZ_vs_HC")) %>%
+  dplyr::filter(submodel %in% c("bulk","adjusted__1__1"))
+  
+dz = dz %>%
+  mutate(dir = case_when(fdr <= 0.05 & effect_size > 0 ~ "up",
+                         fdr <= 0.05 & effect_size < 0 ~ "down",
+                         .default = "unchanged"))
+dz_wide = dz %>%
+  pivot_wider(id_cols = c(feature_id, submodel),
+              names_from  = term,
+              values_from = dir)
+
+gene_space = merge(Treatment_genes, dz_wide, all = T)
+gene_space = gene_space %>%
+  mutate(in_white_space_L_vs_NL = case_when(estimate > 0 & L_vs_NL == "up" ~ "yesUp",
+                                            estimate < 0 & fdr > 0.05 & L_vs_NL == "up" ~ "yesUp",
+                                            estimate < 0 & L_vs_NL == "down" ~ "yesDown",
+                                            estimate > 0 & fdr > 0.05 & L_vs_NL == "down" ~ "yesDown",
+                                            .default = "no")) %>%
+  mutate(in_white_space_L_vs_HC = case_when(estimate > 0 & L_vs_HC == "up" ~ "yesUp",
+                                            estimate < 0 & fdr > 0.05 & L_vs_HC == "up" ~ "yesUp",
+                                            estimate < 0 & L_vs_HC == "down" ~ "yesDown",
+                                            estimate > 0 & fdr > 0.05 & L_vs_HC == "down" ~ "yesDown",
+                                            .default = "no")) %>%
+  mutate(in_white_space_NL_vs_HC = case_when(estimate > 0 & NL_vs_HC == "up" ~ "yesUp",
+                                             estimate < 0 & fdr > 0.05 & NL_vs_HC == "up" ~ "yesUp",
+                                             estimate < 0 & NL_vs_HC == "down" ~ "yesDown",
+                                             estimate > 0 & fdr > 0.05 & NL_vs_HC == "down" ~ "yesDown",
+                                            .default = "no")) %>%
+  mutate(in_white_space_DZ_vs_HC = case_when(estimate > 0 & DZ_vs_HC == "up" ~ "yesUp",
+                                             estimate < 0 & fdr > 0.05 & DZ_vs_HC == "up" ~ "yesUp",
+                                             estimate < 0 & DZ_vs_HC == "down" ~ "yesDown",
+                                             estimate > 0 & fdr > 0.05 & DZ_vs_HC == "down" ~ "yesDown",
+                                            .default = "no")) %>%
+  dplyr::select(feature_id, submodel, dataset, term, estimate,fdr,log10_fdr,L_vs_NL,in_white_space_L_vs_NL,
+                DZ_vs_HC, in_white_space_DZ_vs_HC, L_vs_HC, in_white_space_L_vs_HC, NL_vs_HC, in_white_space_NL_vs_HC)
+  
+pushToCC(gene_space, tagsToPass = list(list(name="object",value="gene_white_space")))
+# wf-3d117171a9
+
+# bq_table_create(bq_table("cytoreason", "s05_atopic_dermatitis", table = "whiteSpace_genes"), fields = as_bq_fields(gene_space)) # made upload problems without it
+uploadToBQ(gene_space, bqdataset = "s05_atopic_dermatitis", tableName = "whiteSpace_genes")

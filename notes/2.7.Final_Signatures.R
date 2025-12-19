@@ -119,36 +119,6 @@ pushToCC(mast, tagsToPass = list(list(name="object",value="mast_signatures")))
 # wf-2312a1f064
 
 
-# 6. Add Th2 genesets to signatures we pass
-# ---------------------------------------------------
-library(biomaRt)
-geneMapping = toTable(org.Hs.eg.db::org.Hs.egSYMBOL)
-
-th2 = openxlsx::read.xlsx("~/analysis-s05/data/Type 2 inflammation signatures.xlsx", sheet = 2)
-th2 = as.list(th2)
-th2 = lapply(th2, function(x) x[!is.na(x)])
-th2 = lapply(th2, function(x) str_trim(x,"both"))
-th2_pathways = th2$Th2_pathways
-th2 = th2[-which(names(th2) == "Th2_pathways")]
-
-# translate the mouse genes to human
-human <- useMart("ensembl", dataset = "hsapiens_gene_ensembl", host = "https://dec2021.archive.ensembl.org/")
-mouse <- useMart("ensembl", dataset = "mmusculus_gene_ensembl", host = "https://dec2021.archive.ensembl.org/")
-
-homologs <- getLDS(attributes = c("mgi_symbol", "entrezgene_id"),
-                   filters = "mgi_symbol",
-                   values = th2$Tibbitt,
-                   mart = mouse,
-                   attributesL = c("hgnc_symbol", "entrezgene_id"),
-                   martL = human)
-
-th2$Tibbitt = unique(homologs$HGNC.symbol)
-
-th2 = lapply(th2, function(x) geneMapping$gene_id[match(x, geneMapping$symbol)])
-pushToCC(th2, tagsToPass = list(list(name="object",value="th2_signatures")))
-# wf-e02cfb9673
-
-
 ### 7. Pooling all signatures
 ### ================================
 x2 = readRDS(get_workflow_outputs("wf-e90c83f33a")) %>% lapply(., as.character)
@@ -156,7 +126,6 @@ ligands = readRDS(get_workflow_outputs("wf-0ee398830a"))
 positives = readRDS(get_workflow_outputs("wf-3abe7c76cd")) %>% lapply(., as.character)
 itch = readRDS(get_workflow_outputs("wf-16fa7ba6c0"))
 mast = readRDS(get_workflow_outputs("wf-2312a1f064"))
-th2 = readRDS(get_workflow_outputs("wf-e02cfb9673"))
 
 nc = x2[str_detect(names(x2),"nc_50|Random")]
   names(nc) = str_remove(names(nc),"nc_50.")
@@ -172,21 +141,22 @@ names(itch) = c("Nattkemper","Jha")
 X2 = c(x2, ligands, positives, itch, mast)
 
 allSignatures = list(X2 = X2,
-                     negativeControls = nc,
-                     Th2 = th2)
+                     negativeControls = nc)
 
 pushToCC(allSignatures, tagsToPass = list(list(name="object",value="allSignatures")))
-# wf-b1950a97bd
-# wf-d22894f90b
+# wf-b1950a97bd - with cov
+# wf-d22894f90b - with th2
+# wf-ae71fd5351 - no cov, no th2
 
 signatures.long = reshape2::melt(allSignatures)
 signatures.long = signatures.long[-which(duplicated(signatures.long[,2:3])),3:2] # keep only the signature name and collection
 colnames(signatures.long) = c("Target.Collection","Target.Identifier")
 signatures.long$feature_id = paste0(signatures.long$Target.Collection, "__", signatures.long$Target.Identifier)
-pushToCC(signatures.long, tagsToPass = list(list(name="object",value="targetMapping.V4"),
+pushToCC(signatures.long, tagsToPass = list(list(name="object",value="targetMapping.V5"),
                                             list(name="project",value="evo")))
-# wf-6c4b539629
-#wf-09e6717c3e
+# wf-6c4b539629 - with cov
+# wf-09e6717c3e - with th2
+# wf-8eee2f4419 - no cov, no th2
 
 collectionMapping = lapply(names(list(x2=x2,ligands=ligands, positives=positives, itch=itch,mast=mast, nc=nc)), 
        function(collection){
@@ -200,5 +170,6 @@ collectionMapping = rbind(collectionMapping, data.frame(signature = c("smoothedR
                                                  "random"),
                                                collection = rep("Negative Controls",3)))
 pushToCC(collectionMapping)
-# wf-d3240e7fb6
-# wf-83b199630d
+# wf-d3240e7fb6 - with cov
+# wf-83b199630d - with th2
+# wf-3df1530237 - no cov, no th2

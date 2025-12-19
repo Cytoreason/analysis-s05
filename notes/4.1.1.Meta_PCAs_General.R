@@ -129,7 +129,7 @@ process = function(res, term, submodel, collection) {
   if(!is.null(collection)){
     res$collection = collection
   } else {
-    res$collection = "all"
+    res$collection = paste0("KeyPathways_in_",term)
   }
   return(res)
 }
@@ -182,7 +182,7 @@ pathwayLoadings_all = lapply(names(metaPCA_pathways), function(term){
     res_perCollection = lapply(names(metaPCA_pathways[[term]][[submodel]][["perCollection"]]), function(collection){
       cat("\r", term, submodel,"...",collection)
       res_col = extract_pathwayLoadings(metaPCA_pathways[[term]][[submodel]][["perCollection"]][[collection]]$metaPCA, T, flipPC2)
-      res_col = process(res_col, submodel, term, collection)
+      res_col = process(res_col, term, submodel, collection)
       return(res_col)
     }) %>% bind_rows()
     cat("\r", term, submodel,"........done")
@@ -194,10 +194,9 @@ pathwayLoadings_all = unique(pathwayLoadings_all)
 pathLoadings.BQ = pathwayLoadings_all %>%
   dplyr::select(-c(1:3))
 colnames(pathLoadings.BQ) = c("Pathway","PC","Loading","Term","Submodel","Collection")
-pathLoadings.BQ$Collection[which(pathLoadings.BQ$Collection == "all")] = paste0("Changed in ", pathLoadings.BQ$Term[which(pathLoadings.BQ$Collection == "all")])
 pushToCC(pathLoadings.BQ, tagsToPass = list(list(name="analysis",value="pathway_meta_pca_loadings")))
 # wf-c397bd39fd
-# wf-036d5cf85e
+# wf-36fef22586
 uploadToBQ(pathLoadings.BQ, bqdataset = "s05_atopic_dermatitis", tableName = "pathwayLoadings")
 
 

@@ -7,18 +7,20 @@ devtools::load_all("~/analysis-s05/R/utils.R")
 library(cytoreason.ccm.pipeline) # make sure to load version >= 1.0.1
 library(tidyverse)
 
-ccm_wfid = "wf-8e948630d7"
+ccm_wfid = "wf-4ac16e6903"
 
-collectionMapping = readRDS(get_workflow_outputs("wf-d3240e7fb6"))
+collectionMapping = readRDS(get_workflow_outputs("wf-3df1530237"))
   collectionMapping$collection[str_detect(collectionMapping$collection, "Negative|negative")] <- "negativeControls"
   collectionMapping$ID = paste0(collectionMapping$collection,":",collectionMapping$signature)
   collectionMapping$previousID = paste0("X2:",collectionMapping$signature)
   collectionMapping$previousID[which(collectionMapping$collection == "negativeControls")] <- paste0("negativeControls:",collectionMapping$signature[which(collectionMapping$collection == "negativeControls")])
   collectionMapping$previousID[which(collectionMapping$signature %in% c("BMP4","BMP6","BMP7","TGFB2"))] <- paste0("X2:",collectionMapping$signature[which(collectionMapping$signature %in% c("BMP4","BMP6","BMP7","TGFB2"))])
 signatures = readRDS(get_workflow_outputs("wf-a24a2031e8"))
+signatures = signatures[-which(str_detect(signatures$Old_identifier,"x2cov")),]
 signatureMapping = merge(collectionMapping, signatures, by.x = "signature", by.y = "Old_identifier", all=T)
 pushToCC(signatureMapping)
 # wf-fcb1ef2bbd
+# wf-0cb82886cc
 
 
 # 2. Extraction
@@ -82,6 +84,7 @@ image = "eu.gcr.io/cytoreason/ci-cytoreason.ccm.pipeline-package:master_latest")
 # wf-4a73197f02
 # wf-d4494fb9b7
 # wf-3c1660f432
+# wf-a09930b845
 
 Results = readRDS(get_workflow_outputs("wf-3c1660f432"))
 
@@ -234,10 +237,7 @@ uploadToBQ(Results$Target_Cell_PCA, bqdataset = "s05_atopic_dermatitis", tableNa
 uploadToBQ(Results$Target_Pathway_PCA, bqdataset = "s05_atopic_dermatitis", tableName = "Results_Pathway_PCA")
 
 
-## Add correlations between cells and pathways
-Results = readRDS(get_workflow_outputs("wf-3c1660f432"))
-featureCorr=Results$TargetFeatures
-featureCorr = featureCorr %>%
-  # dplyr::filter(!collection %in% c("negativeControls","X2")) %>%
-  dplyr::filter(!str_detect(feature_id_2, "X2:|negativeControls:"))
-  
+## Outside run of meta correlations to SCORAD
+## -------------------------------------------------
+ccm_scorad = as_ccm_fit("wf-47f31aef48")
+SCORAD = build_service_result_tables(ccm_scorad$meta$L_vs_NL$)
