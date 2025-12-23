@@ -10,6 +10,7 @@ lung <- SignatureCollection("lung_v4")
   lung_markers = split(lung_markers$SYMBOL, lung_markers$celltype)
 skin <- SignatureCollection("skin_v12")
   skin_markers = get_markers(skin)
+  skin_markers$cellName = cytoreason.datasource::translate_ids2names(skin_markers$celltype)
   skin_markers = split(skin_markers$SYMBOL, skin_markers$celltype)
 skeletal <- SignatureCollection("skeletal_v2")
   skeletal_markers = get_markers(skeletal)
@@ -30,3 +31,36 @@ overlap_lung_skin = sapply(skin_markers, function(x) sapply(lung_markers[which(n
   overlap_lung_skin = t(overlap_lung_skin)
   rownames(overlap_lung_skin) = skin_mapping$celltype[match(rownames(overlap_lung_skin), skin_mapping$id)]
   
+## Using information from Ben to choose the right signature
+cell_mapping = read.csv("~/exportedFiles/cells_mapping.csv")
+
+lung <- SignatureCollection("lung_v4")
+  lung = get_markers(lung)
+  lung = split(lung$SYMBOL, lung$celltype)
+  lung = lung$CRCL_0000009
+
+ileum <- SignatureCollection("ileum_v2", type = "cyto_marker")
+  ileum = get_markers(ileum)
+  ileum = split(ileum$SYMBOL, ileum$celltype)
+  ileum = ileum$CRCL_0000009
+  
+pan_cancer <- SignatureCollection("pan_cancer_v1")
+  pan_cancer = get_markers(pan_cancer)
+  pan_cancer = split(pan_cancer$SYMBOL, pan_cancer$celltype)
+  pan_cancer = pan_cancer$CRCL_0000009
+  
+gut <- SignatureCollection("gut_v9")
+  gut = get_markers(gut)
+  gut = split(gut$SYMBOL, gut$celltype)
+  gut = gut$CRCL_0000009
+  
+myocardium <- SignatureCollection("myocardium_v1")
+  myocardium = get_markers(myocardium)
+  myocardium = split(myocardium$SYMBOL, myocardium$celltype)
+  myocardium = myocardium$CRCL_0000009
+  
+all(gut == ileum)
+
+allSigs = list(lung, ileum, pan_cancer, myocardium)
+allSigs <- do.call(cbind, lapply(allSigs, function(v) c(v, rep(NA, max(lengths(allSigs)) - length(v)))))
+write.csv(allSigs,"~/exportedFiles/mast_cell_signatures.csv")

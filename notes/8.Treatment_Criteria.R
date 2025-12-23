@@ -9,6 +9,9 @@ wantedTerms = read.delim("~/analysis-s05/data/wantedTerms.tsv")
 # ==============================================
 # 1.1. Extract data
 # ------------------------
+wf = "wf-08a6a0a503" # disease model
+wf = "wf-3e419ff83b" # custom gene set
+
 run_function_dist(FUN = function(ccm_wfid, wantedTerms){
   library(cytoreason.ccm.pipeline)
   
@@ -27,30 +30,46 @@ run_function_dist(FUN = function(ccm_wfid, wantedTerms){
   names(Treatments) = unique(wantedTerms$data_set)
   return(Treatments)
 },
-ccm_wfid = "wf-8e948630d7",
+ccm_wfid = wf,
 wantedTerms = wantedTerms,
 memory_request = "5Gi",
 image = "eu.gcr.io/cytoreason/ci-cytoreason.ccm.pipeline-package:master_latest")
-# wf-ca1574909f
+# wf-ca1574909f - disease model
+# wf-42ac6c5a0a - custom gene set
+# wf-c87fc0df08 - additional R/NR - custom geneset
+# wf-6312ef081d - additional R/NR - disease model
 
-Treatment_path = readRDS(get_workflow_outputs("wf-ca1574909f"))
-Treatment_path = lapply(names(Treatment_path), function(x) {
-  y = bind_rows(Treatment_path[[x]]) %>%
+Treatment_path_customGeneset = readRDS(get_workflow_outputs("wf-c87fc0df08"))
+Treatment_path_diseaseModel = readRDS(get_workflow_outputs("wf-6312ef081d"))
+
+Treatment_path = lapply(names(Treatment_path_customGeneset), function(x) {
+  y_dm = bind_rows(Treatment_path_diseaseModel[[x]]) %>%
     dplyr::filter(collection %in% c("h","kegg","reactome","btm"))
+  y_cgs = bind_rows(Treatment_path_customGeneset[[x]]) %>%
+    dplyr::rename(FDR = fdr, ES = es, NES = nes, nMoreExtreme = nmoreextreme) %>%
+    dplyr::select(-feature_id, -hit_id)
+  y = bind_rows(y_dm, y_cgs)
   y$dataset = x
   return(y)
 }) %>% bind_rows()
 
+signatureMapping = readRDS(get_workflow_outputs("wf-aa75ed069b"))
+
+idx=which(Treatment_path$collection == "X2")
+Treatment_path$collection[idx] = signatureMapping$collection[match(Treatment_path$pathway[idx], signatureMapping$signature)]
+
 uploadToBQ(Treatment_path, bqdataset = "s05_atopic_dermatitis", tableName = "treatment_PrePostDupi")
 pushToCC(Treatment_path, tagsToPass = list(list(name="object",value="treatment_PrePostDupi")))
-# wf-88d79c9c27
+# wf-88d79c9c27 - only disease model
+# wf-4a91d09f7c - with custom gene set
+# wf-7b89eb82e9 - including R/NR data
 
 # 1.2. Define white space
 # ---------------------------
 pathways_in_dz = downloadFromBQ(bqdataset = "s05_atopic_dermatitis", tableName = "AD_gx_gsa")
 pathways_in_dz = pathways_in_dz %>%
   group_by(term, submodel) %>%
-  dplyr::filter(submodel %in% c("bulk","adjusted__1__1") & collection %in% c("h","kegg","reactome","btm")) %>%
+  dplyr::filter(submodel %in% c("bulk","adjusted") & collection %in% c("h","kegg","reactome","btm","th2","neuroinflammation")) %>%
   dplyr::select(term, submodel, collection, pathway, NES, FDR, log10_fdr) %>%
   mutate(dir = ifelse(FDR > 0.05, "unchanged",
                       ifelse(NES >0, "up","down"))) %>%
@@ -63,9 +82,9 @@ dz_wide = pathways_in_dz %>%
 
 pathway_treatment = Treatment_path %>%
   group_by(dataset, term, submodel) %>%
-  dplyr::filter(str_detect(term,"Dupilumab") & collection %in% c("h","kegg","reactome","btm")) %>%
+  dplyr::filter(submodel %in% c("bulk","adjusted__1__1") & str_detect(term,"Dupilumab") & collection %in% c("h","kegg","reactome","btm","th2","neuroinflammation")) %>%
   dplyr::select(dataset, term, submodel, collection, pathway, NES, FDR, log10_fdr) %>%
-  mutate(term = as.character(term)) %>%
+  mutate(term = as.character(term), submodel = ifelse(submodel != "bulk","adjusted","bulk")) %>%
   ungroup()
 
 
@@ -94,7 +113,8 @@ pathway_space = pathway_space %>%
 
 pushToCC(pathway_space, tagsToPass = list(list(name="object",value="pathways_ws_all")))
 # wf-8fc42d8d1b
-uploadToBQ(pathways_ws_filter, bqdataset = "s05_atopic_dermatitis", tableName = "whiteSpace_pathways")
+# wf-fb61fed813 - with th2
+uploadToBQ(pathway_space, bqdataset = "s05_atopic_dermatitis", tableName = "whiteSpace_pathways")
 
 
 

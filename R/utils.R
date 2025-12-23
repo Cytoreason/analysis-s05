@@ -129,6 +129,8 @@ squash_axis <- function(from, to, factor) {
   return(scales::trans_new("squash_axis", trans, inv))
 }
 
+
+
 ### Creating targetColors
 targetColors = c(
   "Positives:IL13" = "#482870",
@@ -199,3 +201,5 @@ spot.theme <- list(
   guides(color = F),
   labs(size = "scaled score\nper criteria")
 )
+
+

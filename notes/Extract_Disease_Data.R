@@ -2,23 +2,66 @@ devtools::load_all("~/analysis-s05/R/utils.R")
 library(cytoreason.ccm.pipeline)
 library(tidyverse)
 
-ccm = as_ccm_fit("wf-08a6a0a503") # the original disease model
-ccm = as_ccm_fit("wf-832ab799be") # adding keratinocyte adjustment
+ccm_dm = as_ccm_fit("wf-08a6a0a503") # the original disease model
+ccm_cgs = as_ccm_fit("wf-3e419ff83b") # adding keratinocyte adjustment
 geneMapping = toTable(org.Hs.eg.db::org.Hs.egSYMBOL)
 # uploadToBQ(geneMapping, bqdataset = "s05_atopic_dermatitis", tableName = "geneMapping")
 
+signatureMapping = readRDS(get_workflow_outputs("wf-aa75ed069b"))
+
+
 # 1. gx_gsa
 # ------------------------------------
-gxgsa = rbind(statistic_table(ccm$meta$L_vs_NL$gx_diff$gx_gsa),
-              statistic_table(ccm$meta$AD$gx_diff$gx_gsa),
-              statistic_table(ccm$meta$L_vs_HC$gx_diff$gx_gsa),
-              statistic_table(ccm$meta$NL_vs_HC$gx_diff$gx_gsa))
-gxgsa = gxgsa %>%
+# From disease model
+
+gxgsa_dm = rbind(statistic_table(ccm_dm$meta$L_vs_NL$gx_diff$gx_gsa),
+              statistic_table(ccm_dm$meta$AD$gx_diff$gx_gsa),
+              statistic_table(ccm_dm$meta$L_vs_HC$gx_diff$gx_gsa),
+              statistic_table(ccm_dm$meta$NL_vs_HC$gx_diff$gx_gsa))
+gxgsa_dm = gxgsa_dm %>%
   dplyr::filter(term %in% c("L_vs_NL","DZ_vs_HC","L_vs_HC","NL_vs_HC")) %>%
+  dplyr::filter(submodel %in% c("bulk","adjusted__1__1")) %>%
   mutate(submodel = case_when(submodel == "bulk" ~ "bulk",
-                              submodel == "adjusted__1__meta1_pc1" ~ "adjusted_metaPC1",
-                              submodel == "adjusted__1__CRCL_0000348" ~ "adjusted_keratinocyte",
-                              submodel == "adjusted__1__meta1_pc1_CRCL_0000348" ~ "adjusted_metaPC1_keratinocytes"))
+                              submodel == "adjusted__1__1" ~ "adjusted"))
+
+
+# From custom gene set
+gxgsa_cgs = rbind(statistic_table(ccm_cgs$meta$L_vs_NL$gx_diff$gx_gsa),
+              statistic_table(ccm_cgs$meta$AD$gx_diff$gx_gsa),
+              statistic_table(ccm_cgs$meta$L_vs_HC$gx_diff$gx_gsa),
+              statistic_table(ccm_cgs$meta$NL_vs_HC$gx_diff$gx_gsa))
+gxgsa_cgs = gxgsa_cgs %>%
+  dplyr::filter(term %in% c("L_vs_NL","DZ_vs_HC","L_vs_HC","NL_vs_HC")) %>%
+  dplyr::filter(submodel %in% c("bulk","adjusted__1__1")) %>%
+  mutate(submodel = case_when(submodel == "bulk" ~ "bulk",
+                              submodel == "adjusted__1__1" ~ "adjusted")) %>%
+  rename(FDR = fdr, ES = es, NES = nes, nMoreExtreme = nmoreextreme) %>%
+  dplyr::select(-feature_id,-hit_id)
+
+
+gxgsa = bind_rows(gxgsa_dm, gxgsa_cgs) %>%
+  dplyr::select(-hit, hit) #moving it to be the last column
+
+# Summarize random and shuffled random
+for(id in c("random","top50","bottom50")){
+  idx = which(str_detect(gxgsa$pathway,id))
+  if(id != "random") { id = paste0("smoothedRandom_",id)}
+  
+  tmp = gxgsa[idx,] %>%
+    group_by(submodel,model,term,collection,method) %>%
+    summarise(across(c(pvalue:estimate_percentile), mean, na.rm = TRUE)) %>% 
+    mutate(log10_fdr = -log10(FDR), log10_pvalue = -log10(pvalue)) %>%
+    mutate(pathway = id, hit = NA) %>%
+    select(colnames(gxgsa))
+  
+  gxgsa = gxgsa[-idx,]
+  gxgsa = rbind(gxgsa, tmp)
+}
+
+idx = which(gxgsa$collection == "X2")
+gxgsa$collection[idx] = signatureMapping$collection[match(gxgsa$pathway[idx], signatureMapping$signature)]
+gxgsa$nMoreExtreme=as.integer(gxgsa$nMoreExtreme)
+gxgsa$size=as.integer(gxgsa$size)
 
 uploadToBQ(gxgsa, bqdataset = "s05_atopic_dermatitis", tableName = "AD_gx_gsa")
 

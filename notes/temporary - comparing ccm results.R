@@ -4,7 +4,7 @@ library(tidyverse)
 
 old_ccm = as_ccm_fit("wf-08a6a0a503")
 # new_ccm = as_ccm_fit("wf-832ab799be")
-new_ccm = as_ccm_fit("wf-d9aec2329a")
+new_ccm = as_ccm_fit("wf-9cbfd36e26")
 
 
 ## ct_test per dataset
@@ -20,7 +20,7 @@ extract_ct_test = function(ccm) {
 ct_test_old = extract_ct_test(old_ccm)
   ct_test_old$wfid = "wf-08a6a0a503"
 ct_test_new = extract_ct_test(new_ccm)
-  ct_test_new$wfid = "wf-d9aec2329a"
+  ct_test_new$wfid = "wf-9cbfd36e26"
   colnames(ct_test_new)[9] = "FDR"
 
 ct_tests = bind_rows(ct_test_old, ct_test_new)
@@ -49,9 +49,9 @@ ggplot(nSamples, aes(x = term, y = nSamples, fill = group)) +
 library(plyr)
 skin = read.csv("~/data/skin_modified.csv", header = F, sep = "\t")
 
-ct_tests = ct_tests %>%
-  mutate(feature_id = case_when(wfid != "wf-08a6a0a503" ~ skin$V1[match(feature_id, skin$V2)],
-                                .default = feature_id))
+# ct_tests = ct_tests %>%
+#   mutate(feature_id = case_when(wfid != "wf-08a6a0a503" ~ skin$V1[match(feature_id, skin$V2)],
+#                                 .default = feature_id))
 
 highlight = c("mature NK T cell","natural killer cell","T-helper 17 cell")
 
@@ -164,7 +164,7 @@ old_contrib = extract_contributions(old_ccm) %>% data.frame(sample_id = rownames
   old_contrib = merge(unified_metadata[,c("sample_id","dataset_id_short","sample_classification","condition")], old_contrib, by = "sample_id")
   old_contrib$version = "original"
 
-new_contrib = extract_contributions(new_ccm) %>% data.frame(sample_id = rownames(.))
+new_contrib = extract_contributions(new_ccm) %>% data.frame(sample_id = rownames(.), check.names = F)
   colnames(new_contrib)[-22] = skin$V1[match(colnames(new_contrib)[-22], skin$V2)]
   new_contrib = merge(unified_metadata[,c("sample_id","dataset_id_short","sample_classification","condition")], new_contrib, by = "sample_id")
   new_contrib$version = "new"

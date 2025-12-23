@@ -3,7 +3,7 @@ library(cytoreason.ccm.pipeline)
 library(ComplexHeatmap)
 library(tidyverse)
 
-Results = readRDS(get_workflow_outputs("wf-a53211cea7"))
+Results = readRDS(get_workflow_outputs("wf-64470d2a55"))
 Results$Target_Cell_PCA$PC = sapply(Results$Target_Cell_PCA$Criteria.Identifier, function(x) str_split(x,"pc")[[1]][2])
 Results$Target_Pathway_PCA$PC = sapply(Results$Target_Pathway_PCA$Criteria.Identifier, function(x) str_split(x,"pc")[[1]][2])
 
@@ -17,15 +17,16 @@ Results_binded = Results[setdiff(names(Results), c("Target_Cell", "Target_Pathwa
 # remove bulk & adj mix
 Results_binded = Results_binded[-which(str_detect(Results_binded$DataType,"Target_Pathway_PC") & 
                                         Results_binded$Type == "bulk" & 
-                                        str_detect(Results_binded$Criteria.Identifier,"adj_")),]
+                                        str_detect(Results_binded$Criteria.Identifier,"_adj")),]
 Results_binded = Results_binded[-which(str_detect(Results_binded$DataType,"Target_Pathway_PC") & 
                                          Results_binded$Type == "adjusted__1__1" & 
-                                         str_detect(Results_binded$Criteria.Identifier,"(?<!_)pathway")),]
+                                         str_detect(Results_binded$Criteria.Identifier,"_bulk")),]
+Results_binded$DataType[which(Results_binded$Type != "bulk")] <- paste0("Adj_", Results_binded$DataType[which(Results_binded$Type != "bulk")])
 
-Results_binded$DataType[which(Results_binded$Type != "bulk")] <-paste0("Adj_", Results_binded$DataType[which(Results_binded$Type != "bulk")])
 Results_binded = Results_binded %>%
   dplyr::filter(!str_detect(DataType, "PC3")) %>%
-  dplyr::filter(!str_detect(DataType, "Adj_Target_Pathway_PC2|Adj_Target_Cell_PC|Adj_Target_CS|Adj_Target_MS"))
+  mutate(DataType = str_remove(DataType,"_bulk|_adj")) %>%
+  dplyr::filter(Target.Collection == "epidermis") # all pathways already exist
 
 Results.corr = reshape2::dcast(Results_binded, Target.Identifier ~ DataType, value.var = "metricValue") %>%
     column_to_rownames(var = "Target.Identifier") %>%
@@ -34,7 +35,7 @@ Results.corr = reshape2::dcast(Results_binded, Target.Identifier ~ DataType, val
 corr_corr = cor(Results.corr, method = "pearson")
 
 # presented version used wf-a53211cea7 results
-png("~/analysis-s05/figures/Results/criteria_correlation_pearson.png", bg = "white", res = "120", width = 1200, height = 1000)
+png("~/analysis-s05/figures/Results/criteria_correlation_pearson.png", bg = "white", res = "120", width = 1400, height = 1200)
 Heatmap(corr_corr, cell_fun = function(j, i, x, y, width, height, fill) {
   grid.text(round(corr_corr[i, j],1), x, y, gp = gpar(fontsize = 10))},
   name = "Pearson\nCorrelation", row_labels = str_replace_all(rownames(corr_corr),"_"," "), 
@@ -43,7 +44,7 @@ dev.off()
 
 corr_corr = cor(Results.corr, method = "spearman")
 
-png("~/analysis-s05/figures/Results/criteria_correlation_spearman.png", bg = "white", res = "120", width = 1200, height = 1000)
+png("~/analysis-s05/figures/Results/criteria_correlation_spearman.png", bg = "white", res = "120", width = 1400, height = 1200)
 Heatmap(corr_corr, cell_fun = function(j, i, x, y, width, height, fill) {
   grid.text(round(corr_corr[i, j],1), x, y, gp = gpar(fontsize = 10))},
   name = "Spearman\nCorrelation", row_labels = str_replace_all(rownames(corr_corr),"_"," "), 
