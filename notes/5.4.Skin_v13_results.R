@@ -148,7 +148,10 @@ ggsave("~/analysis-s05/figures/skin_v13/cellLoadings.png", bg = "white")
 
 ## cell loadings per dataset
 ## ======================================
-cellLoadings = lapply(names(ccm_v13$datasets), function(d) {return(data.frame(dataset = d, ccm_v13$datasets[[d]]$cell_pca$rotation[,1:2]))})
+cellLoadings = lapply(names(ccm_v13$datasets), function(d) {
+  return(
+    data.frame(dataset = d, ccm_v13$datasets[[d]]$cell_pca$rotation[,1:2]))
+})
 cellLoadings = lapply(cellLoadings, function(x) {
   x$Cell = skin$V1[match(rownames(x),skin$V2)]
   x = reshape2::melt(x)

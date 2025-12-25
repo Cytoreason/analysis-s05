@@ -59,6 +59,11 @@ myocardium <- SignatureCollection("myocardium_v1")
   myocardium = split(myocardium$SYMBOL, myocardium$celltype)
   myocardium = myocardium$CRCL_0000009
   
+kidney <- SignatureCollection("kindey_v1")
+  kidney = get_markers(kidney)
+  kidney = split(kidney$SYMBOL, kidney$celltype)
+  kidney = kidney$CRCL_0000009
+  
 all(gut == ileum)
 
 allSigs = list(lung, ileum, pan_cancer, myocardium)

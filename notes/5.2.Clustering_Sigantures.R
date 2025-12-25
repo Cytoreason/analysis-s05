@@ -12,17 +12,17 @@ library(ggdendro)
 
 Results = readRDS(get_workflow_outputs("wf-64470d2a55"))
 
-clusterTargets = function(res, plotSuffix) {
+clusterTargets = function(res, plotSuffix, path) {
   clust = hclust(dist(res))
 
   # Make the dendrogram prettier
   dend = dendro_data(as.dendrogram(clust), type = "rectangle")
   d = ggdendrogram(dend, theme_dendro = T)
-  ggsave(plot = d, paste0("~/analysis-s05/figures/Results/Clustering/clusteringDendrogram_",plotSuffix,".png"), width = 10, height = 4, bg = "white")
+  ggsave(plot = d, paste0(path,"/clusteringDendrogram_",plotSuffix,".png"), width = 10, height = 4, bg = "white")
   
   # optional - vertical
   d = ggdendrogram(dend, theme_dendro = T, rotate = T)
-  ggsave(plot = d, paste0("~/analysis-s05/figures/Results/Clustering/clusteringDendrogram_vertical_",plotSuffix,".png"), width = 4, height = 10, bg = "white")
+  ggsave(plot = d, paste0(path,"/clusteringDendrogram_vertical_",plotSuffix,".png"), width = 4, height = 10, bg = "white")
   
 }
 
@@ -36,66 +36,65 @@ results.partial = do.call(rbind, Results[c("Target_Cell","Target_Pathway")])
 results.partial = results.partial %>%
   dplyr::filter(!Target.Collection %in% c("Ligands","Mast","epidermis","th2")) %>%
   dplyr::filter(!str_detect(Target.ID,"neuroinflammation")) %>%
-  dplyr::filter(!str_detect(Target.Identifier, c("Jha|insilico|PAMP|Icatibant|CST14|SP|x2_activated_inhibition_late|x2_general_inhibition_late|x2_activation_late"))) %>%
+  dplyr::filter(!str_detect(Target.Identifier, c("Jha|insilico|PAMP|Icatibant|CST14|SP|x2_activated_inhibition_late|x2_general_inhibition_late|x2_activation_late|BMP7|CXCL4|X2 late"))) %>%
+  dplyr::filter(!Target.Identifier %in% c("X2 early general inhibition","X2 early activation","X2 early activated inhibition","aIgE late activation")) %>%
   dplyr::filter(Type == "bulk")
 
 signatures = unique(results.partial$Target.ID)
 pushToCC(signatures, tagsToPass = list(list(name="object",value="signatures_used_in_clustering")))
 # wf-38f6dccf0a
+# wf-30bcb0f30c - removed additional signatures per client request
 
 results.wide = reshape2::dcast(results.partial, Target.Identifier ~ Criteria.Identifier, value.var = "metricValue")
 rownames(results.wide) = results.wide$Target.Identifier
-results.wide = results.wide[,-1]
-
-clusterTargets(results.wide, "bulk_allPathways_allCells")
-
 
 # 2. All cells and pathways, bulk & adjusted
 results.partial = do.call(rbind, Results[c("Target_Cell","Target_Pathway")])
 results.partial = results.partial %>%
   dplyr::filter(!Target.Collection %in% c("Ligands","Mast","epidermis","th2")) %>%
   dplyr::filter(!str_detect(Target.ID,"neuroinflammation")) %>%
-  dplyr::filter(!str_detect(Target.Identifier, c("Jha|insilico|PAMP|Icatibant|CST14|SP|x2_activated_inhibition_late|x2_general_inhibition_late|x2_activation_late"))) %>%
+  dplyr::filter(!str_detect(Target.Identifier, c("Jha|insilico|PAMP|Icatibant|CST14|SP|x2_activated_inhibition_late|x2_general_inhibition_late|x2_activation_late|BMP7|CXCL4|X2 late"))) %>%
+  dplyr::filter(!Target.Identifier %in% c("X2 early general inhibition","X2 early activation","X2 early activated inhibition","aIgE late activation")) %>%
   mutate(Criteria.Identifier = case_when(Type == "bulk" ~ Criteria.Identifier, .default = paste0("adj ",Criteria.Identifier)))
 
 results.wide = reshape2::dcast(results.partial, Target.Identifier ~ Criteria.Identifier, value.var = "metricValue")
 rownames(results.wide) = results.wide$Target.Identifier
 results.wide = results.wide[,-1]
 
-clusterTargets(results.wide, "bulkAndAdj_allPathways_allCells")
+clusterTargets(results.wide, "bulkAndAdj_allPathways_allCells", "~/analysis-s05/figures/Results/Clustering/allCellsPathways/ReducedNumberOfTargets")
 
 
-# 3. All cells and pathways PCAs, bulk
-results.partial = do.call(rbind, Results[c("Target_Cell_PCA", "Target_Pathway_PCA")])
-results.partial = results.partial %>%
-  dplyr::filter(!Target.Collection %in% c("Ligands","Mast","epidermis","th2")) %>%
-  dplyr::filter(!str_detect(Target.ID,"neuroinflammation")) %>%
-  dplyr::filter(!str_detect(Target.Identifier, c("Jha|insilico|PAMP|Icatibant|CST14|SP|x2_activated_inhibition_late|x2_general_inhibition_late|x2_activation_late"))) %>%
-  dplyr::filter(Type == "bulk")
-
-results.wide = reshape2::dcast(results.partial, Target.Identifier ~ Criteria.Identifier, value.var = "metricValue")
-rownames(results.wide) = results.wide$Target.Identifier
-results.wide = results.wide[,-c(1:4)] # also remove correlations to adj pathway pca
-
-clusterTargets(results.wide, "bulk_allPCAs")
-
-
-# 4. All pathways PCAs, bulk and adjusted (bulk with bulk, adj with adj)
-results.partial = do.call(rbind, Results[c("Target_Pathway_PCA")])
-results.partial = results.partial %>%
-  dplyr::filter(!Target.Collection %in% c("Ligands","Mast","epidermis","th2")) %>%
-  dplyr::filter(!str_detect(Target.ID,"neuroinflammation")) %>%
-  dplyr::filter(!str_detect(Target.Identifier, c("Jha|insilico|PAMP|Icatibant|CST14|SP|x2_activated_inhibition_late|x2_general_inhibition_late|x2_activation_late")))
-
-results.partial = results.partial[-which(results.partial$Type == "bulk" &
-                                         results.partial$Criteria.Identifier %in% c("adj_pathway_meta_pc1","adj_pathway_meta_pc2","adj_pathway_meta_pc3")),]
-results.partial = results.partial[-which(results.partial$Type == "adjusted__1__1" &
-                                           results.partial$Criteria.Identifier %in% c("pathway_meta_pc1","pathway_meta_pc2","pathway_meta_pc3")),]
-results.wide = reshape2::dcast(results.partial, Target.Identifier ~ Criteria.Identifier, value.var = "metricValue")
-rownames(results.wide) = results.wide$Target.Identifier
-results.wide = results.wide[,-1]
-
-clusterTargets(results.wide, "bulkAndAdj_matchingPathwayPCAs")
+# # 3. All cells and pathways PCAs, bulk
+# results.partial = do.call(rbind, Results[c("Target_Cell_PCA", "Target_Pathway_PCA")])
+# results.partial = results.partial %>%
+#   dplyr::filter(!Target.Collection %in% c("Ligands","Mast","epidermis","th2")) %>%
+#   dplyr::filter(!str_detect(Target.ID,"neuroinflammation")) %>%
+#   dplyr::filter(!str_detect(Target.Identifier, c("Jha|insilico|PAMP|Icatibant|CST14|SP|x2_activated_inhibition_late|x2_general_inhibition_late|x2_activation_late"))) %>%
+#   dplyr::filter(Type == "bulk")
+# 
+# results.wide = reshape2::dcast(results.partial, Target.Identifier ~ Criteria.Identifier, value.var = "metricValue")
+# rownames(results.wide) = results.wide$Target.Identifier
+# results.wide = results.wide[,-c(1:4)] # also remove correlations to adj pathway pca
+# 
+# clusterTargets(results.wide, "bulk_allPCAs")
+# 
+# 
+# # 4. All pathways PCAs, bulk and adjusted (bulk with bulk, adj with adj)
+# results.partial = do.call(rbind, Results[c("Target_Pathway_PCA")])
+# results.partial = results.partial %>%
+#   dplyr::filter(!Target.Collection %in% c("Ligands","Mast","epidermis","th2")) %>%
+#   dplyr::filter(!str_detect(Target.ID,"neuroinflammation")) %>%
+#   dplyr::filter(!str_detect(Target.Identifier, c("Jha|insilico|PAMP|Icatibant|CST14|SP|x2_activated_inhibition_late|x2_general_inhibition_late|x2_activation_late")))
+# 
+# results.partial = results.partial[-which(results.partial$Type == "bulk" &
+#                                          results.partial$Criteria.Identifier %in% c("adj_pathway_meta_pc1","adj_pathway_meta_pc2","adj_pathway_meta_pc3")),]
+# results.partial = results.partial[-which(results.partial$Type == "adjusted__1__1" &
+#                                            results.partial$Criteria.Identifier %in% c("pathway_meta_pc1","pathway_meta_pc2","pathway_meta_pc3")),]
+# results.wide = reshape2::dcast(results.partial, Target.Identifier ~ Criteria.Identifier, value.var = "metricValue")
+# rownames(results.wide) = results.wide$Target.Identifier
+# results.wide = results.wide[,-1]
+# 
+# clusterTargets(results.wide, "bulkAndAdj_matchingPathwayPCAs")
 
 
 ## Export clusters
@@ -104,7 +103,7 @@ set.seed(1234)
 
 # 1. All cells and pathways, bulk & adjusted
 # -----------------------------------------------
-signatures = readRDS(get_workflow_outputs("wf-38f6dccf0a"))
+signatures = readRDS(get_workflow_outputs("wf-30bcb0f30c"))
 results.partial = do.call(rbind, Results[c("Target_Cell","Target_Pathway")])
 results.partial = results.partial %>%
   dplyr::filter(Target.ID %in% signatures) %>%
@@ -115,54 +114,55 @@ rownames(results.wide) = results.wide$Target.Identifier
 results.wide = results.wide[,-1]
 
 clust = hclust(dist(results.wide))
-clust = cutree(clust, k = 6) %>% # first split to 6, then join a few
+clust = cutree(clust, h=20) %>% # first split to 6, then join a few
   enframe(name = "signature", value = "cluster") %>%
   arrange(cluster) %>%
   mutate(new_cluster = cluster)
 
 # now we re-arragne
 # cluster 6 becomes cluster 2
-  clust$new_cluster[which(clust$cluster == 6)] <- 2
+  clust$new_cluster[which(clust$cluster %in% c(1,5))] <- 3
 # cluster 2 becomes cluster 4
-  clust$new_cluster[which(clust$cluster == 2)] <- 4
+  clust$new_cluster[which(clust$cluster == 2)] <- 1
 # with the negative controls is cluster 5
-  clust$new_cluster[which(clust$cluster %in% 3:4)] <- 5
+  clust$new_cluster[which(clust$cluster %in% c(3,6))] <- 4
 # remaining cluster is number 3
-  clust$new_cluster[which(clust$cluster == 5)] <- 3
+  clust$new_cluster[which(clust$cluster == 4)] <- 2
 
   clust = arrange(clust, new_cluster)
   pushToCC(clust, tagsToPass = list(list(name="object",value="clustering_bulkadj_allcellsandpathways")))
   # wf-9af5bfe1f8
   # wf-99bb4eb731
+  # wf-3fb25d04de - reducing number of targets
 
-# 2. All cells and pathways PCAs, bulk
-# -----------------------------------------
-signatures = readRDS(get_workflow_outputs("wf-38f6dccf0a"))
-results.partial = do.call(rbind, Results[c("Target_Cell_PCA", "Target_Pathway_PCA")])
-results.partial = results.partial %>%
-  dplyr::filter(Target.ID %in% signatures) %>%
-  dplyr::filter(Type == "bulk")
-
-results.wide = reshape2::dcast(results.partial, Target.Identifier ~ Criteria.Identifier, value.var = "metricValue")
-rownames(results.wide) = results.wide$Target.Identifier
-results.wide = results.wide[,-c(1:4)] # also remove correlations to adj pathway pca
-
-clust = hclust(dist(results.wide))
-clust = cutree(clust, h = 0.63) %>% # first split to 6, then join a few
-  enframe(name = "signature", value = "cluster") %>%
-  arrange(cluster) %>%
-  mutate(new_cluster = cluster)
-
-# now we re-arragne
-# clusters 3 and 6 become cluster 5
-clust$new_cluster[which(clust$cluster %in% c(3,6))] <- 5
-
-clust$new_cluster[which(clust$cluster == 2)] <- 3
-clust$new_cluster[which(clust$cluster == 5)] <- 2
-
-clust = arrange(clust, new_cluster)
-pushToCC(clust, tagsToPass = list(list(name="object",value="clustering_bulk_PCAcellsandpathways")))
-# wf-2eb40e9d34
+# # 2. All cells and pathways PCAs, bulk
+# # -----------------------------------------
+# signatures = readRDS(get_workflow_outputs("wf-38f6dccf0a"))
+# results.partial = do.call(rbind, Results[c("Target_Cell_PCA", "Target_Pathway_PCA")])
+# results.partial = results.partial %>%
+#   dplyr::filter(Target.ID %in% signatures) %>%
+#   dplyr::filter(Type == "bulk")
+# 
+# results.wide = reshape2::dcast(results.partial, Target.Identifier ~ Criteria.Identifier, value.var = "metricValue")
+# rownames(results.wide) = results.wide$Target.Identifier
+# results.wide = results.wide[,-c(1:4)] # also remove correlations to adj pathway pca
+# 
+# clust = hclust(dist(results.wide))
+# clust = cutree(clust, h = 0.63) %>% # first split to 6, then join a few
+#   enframe(name = "signature", value = "cluster") %>%
+#   arrange(cluster) %>%
+#   mutate(new_cluster = cluster)
+# 
+# # now we re-arragne
+# # clusters 3 and 6 become cluster 5
+# clust$new_cluster[which(clust$cluster %in% c(3,6))] <- 5
+# 
+# clust$new_cluster[which(clust$cluster == 2)] <- 3
+# clust$new_cluster[which(clust$cluster == 5)] <- 2
+# 
+# clust = arrange(clust, new_cluster)
+# pushToCC(clust, tagsToPass = list(list(name="object",value="clustering_bulk_PCAcellsandpathways")))
+# # wf-2eb40e9d34
 
 
 ## Pathways driving the differences between clusters
@@ -175,7 +175,7 @@ clusterColor = c("1" = "#8B0000", "2" = "#228B22", "3" = "#482870", "4" = "#4169
 # Extract loadings
 # -------------------------
 Results = readRDS(get_workflow_outputs("wf-64470d2a55")) # derived from the CCM analysis
-signatures = readRDS(get_workflow_outputs("wf-38f6dccf0a"))
+signatures = readRDS(get_workflow_outputs("wf-30bcb0f30c"))
   signatures = signatures[-which(signatures == "Itch:Nattkemper")]
 
 Results_filtered = Results$Target_Pathway %>%
@@ -189,6 +189,7 @@ results.wide = results.wide[,-1]
 # wf-ffee8c9b74 - without th2
 # wf-45574cc2a7
 # wf-90c82311a0 - no BTM
+# wf-ac0d855526 - reduced number of targets
 
 # The next function saves and plots the *top* loadings from every pair of clusters, and returns all the loadings
 # for every pair.
@@ -271,32 +272,34 @@ extractTopLoadings = function(nClusters, results.wide, clusterTable, directory) 
 
 # clustering based on all cells and pathways, bulk and adjusted
 toploadings = list()
-clust = readRDS(get_workflow_outputs("wf-99bb4eb731"))
+clust = readRDS(get_workflow_outputs("wf-3fb25d04de"))
 loadings = extractTopLoadings(nClusters = length(unique(clust$new_cluster)), 
                               results.wide = results.wide, 
                               clusterTable = clust,
-                              directory = "~/analysis-s05/figures/Results/Clustering/allCellsPathways/Top100/")
+                              directory = "~/analysis-s05/figures/Results/Clustering/allCellsPathways/ReducedNumberOfTargets/")
 pushToCC(loadings, tagsToPass = list(list(name="object",value="clustering_bulkandadj_cellsandpathways"),list(name="analysis",value="loadings")))
 # wf-fa2013cbb8
 # wf-6251213c81
 # wf-3d1796d991 - top 100, no BTM
+# wf-9d626a0fba - reduced number of targets - 5 clusters
 pushToCC(toploadings, tagsToPass = list(list(name="object",value="clustering_bulkandadj_cellsandpathways"),list(name="analysis",value="toploadings")))
 # wf-f2617daae8
 # wf-04a65ab292
 # wf-7143ae3ba8 - top 100, no BTM
+# wf-d186aba404 - reduced number of targets - 5 clusters
 
 
-# clustering based on bulk cell and pathway pcas
-toploadings = list()
-clust = readRDS(get_workflow_outputs("wf-2eb40e9d34"))
-loadings = extractTopLoadings(nClusters = length(unique(clust$new_cluster)), 
-                              results.wide = results.wide, 
-                              clusterTable = clust,
-                              directory = "~/analysis-s05/figures/Results/Clustering/PCAs")
-pushToCC(loadings, tagsToPass = list(list(name="object",value="clustering_bulk_PCAcellsandpathways"),list(name="analysis",value="loadings")))
-# wf-d67327dcf0
-pushToCC(toploadings, tagsToPass = list(list(name="object",value="clustering_bulk_PCAcellsandpathways"),list(name="analysis",value="toploadings")))
-# wf-db33789134
+# # clustering based on bulk cell and pathway pcas
+# toploadings = list()
+# clust = readRDS(get_workflow_outputs("wf-2eb40e9d34"))
+# loadings = extractTopLoadings(nClusters = length(unique(clust$new_cluster)), 
+#                               results.wide = results.wide, 
+#                               clusterTable = clust,
+#                               directory = "~/analysis-s05/figures/Results/Clustering/PCAs")
+# pushToCC(loadings, tagsToPass = list(list(name="object",value="clustering_bulk_PCAcellsandpathways"),list(name="analysis",value="loadings")))
+# # wf-d67327dcf0
+# pushToCC(toploadings, tagsToPass = list(list(name="object",value="clustering_bulk_PCAcellsandpathways"),list(name="analysis",value="toploadings")))
+# # wf-db33789134
 
 
 
@@ -305,12 +308,12 @@ pushToCC(toploadings, tagsToPass = list(list(name="object",value="clustering_bul
 library(ComplexHeatmap)
 
 # bulk & adjusted all cells and pathways
-toploadings = readRDS(get_workflow_outputs("wf-7143ae3ba8"))
-clusters = readRDS(get_workflow_outputs("wf-99bb4eb731")) %>% .[-19,] # removing Nattkemper because we also want to correlate to it
+toploadings = readRDS(get_workflow_outputs("wf-d186aba404"))
+clusters = readRDS(get_workflow_outputs("wf-3fb25d04de")) %>% .[-which(.[,"signature"] == "Nattkemper"),] # removing Nattkemper because we also want to correlate to it
 
-# bulk cell and pathway pcas
-toploadings = readRDS(get_workflow_outputs("wf-db33789134"))
-clusters = readRDS(get_workflow_outputs("wf-2eb40e9d34")) %>% .[-27,] # removing Nattkemper because we also want to correlate to it
+# # bulk cell and pathway pcas
+# toploadings = readRDS(get_workflow_outputs("wf-db33789134"))
+# clusters = readRDS(get_workflow_outputs("wf-2eb40e9d34")) %>% .[-27,] # removing Nattkemper because we also want to correlate to it
 
 
 importantClusters = do.call(rbind, toploadings) %>%
@@ -318,11 +321,12 @@ importantClusters = do.call(rbind, toploadings) %>%
   mutate(Pathway = str_remove(Pathway, " \\(reactome\\)| \\(kegg\\)| \\(h\\)| \\(btm\\)| \\(itch\\)| \\(th2\\)")) %>%
   mutate(Pathway = paste0(Collection,":",Pathway))
 importantClusters = unique(importantClusters$Pathway)
-
+importantClusters = str_remove(importantClusters," \\(Mast\\)| \\(Itch\\)")
 
 # scaling the correlations per pathway for easier interpertation
-results.wide = readRDS(get_workflow_outputs("wf-90c82311a0"))
+results.wide = readRDS(get_workflow_outputs("wf-ac0d855526"))
 mat = apply(results.wide[,which(colnames(results.wide) %in% importantClusters)],2,scale)
+ncol(mat) == length(importantClusters) # needs to be TRUE
 rownames(mat) = rownames(results.wide)
 mat = mat[match(clusters$signature, rownames(mat)),]
 mat = t(mat)
@@ -335,31 +339,25 @@ ann = HeatmapAnnotation(df = clusters[,-c(1:3),drop=F], col = list(Cluster = clu
 ordering = hclust(dist(mat))
 pathwayClusters = data.frame(Pathway = ordering$labels,
                              Order = ordering$order,
-                             Cluster = cutree(ordering, k = 3),
-                             SecondaryClustering = cutree(ordering, k=5))
+                             Cluster = cutree(ordering, k=6))
+pushToCC(pathwayClusters)
+# wf-19e9b5f3da
+# wf-f8d8fe3f59
+# wf-c0fc0ae6fa - reduced number of targets, k=8
+# wf-b5fb3e16fa - reduced number of targets, k=7
+# wf-c73ebe0581 - reduced number of targets, k=6
 
-pdf("~/analysis-s05/figures/Results/Clustering/allCellsPathways/Top100/pathwayClusters_5.pdf", height = 10, width = 8)
+pdf("~/analysis-s05/figures/Results/Clustering/allCellsPathways/ReducedNumberOfTargets/PathwayClusters_6", height = 10, width = 8)
 Heatmap(mat, show_row_names = F, show_column_names = T, use_raster = F,
         top_annotation = ann, cluster_columns = T, name = "scaled\ncorrelation",
-        row_split = data.frame(pathwayClusters$SecondaryClustering),
+        row_split = data.frame(pathwayClusters$Cluster),
         column_title = "bulk & adjusted correlation to all cells and pathways")
 dev.off()
 
-pathwayClusters = pathwayClusters %>%
-  dplyr::select(Order, Pathway, SecondaryClustering) %>%
-  rename(Pathway_Cluster = SecondaryClustering)
-# %>%
-#   mutate(enrichedIn = case_when(Pathway_Cluster == 1 ~ "Target Cluster 3 but also 2 and 4",
-#                                 Pathway_Cluster == 2 ~ "Target Cluster 5 but also 4",
-#                                 Pathway_Cluster == 3 ~ "Target Cluster 4",
-#                                 Pathway_Cluster == 4 ~ "Target Clusters 1 and 5",
-#                                 Pathway_Cluster == 5 ~ "Target Clusters 4 and 52, a bit of 1",
-#                                 Pathway_Cluster == 6 ~ "Target Cluster 1"))
-# wf-19e9b5f3da
-# wf-f8d8fe3f59
-openxlsx::write.xlsx(pathwayClusters, "~/analysis-s05/figures/Results/Clustering/PCAs/pathwayClusters.xlsx")
-openxlsx::write.xlsx(pathwayClusters, "~/analysis-s05/figures/Results/Clustering/allCellsPathways/pathwayClusters.xlsx")
-openxlsx::write.xlsx(pathwayClusters, "~/analysis-s05/figures/Results/Clustering/allCellsPathways/Top100/pathwayClusters_5.xlsx")
+
+# openxlsx::write.xlsx(pathwayClusters, "~/analysis-s05/figures/Results/Clustering/PCAs/pathwayClusters.xlsx")
+# openxlsx::write.xlsx(pathwayClusters, "~/analysis-s05/figures/Results/Clustering/allCellsPathways/pathwayClusters.xlsx")
+openxlsx::write.xlsx(pathwayClusters, "~/analysis-s05/figures/Results/Clustering/allCellsPathways/ReducedNumberOfTargets/pathwayClusters_6.xlsx")
 
 
 

@@ -143,11 +143,21 @@ pushToCC(neuro, tagsToPass = list(list(name="object",value="neuro_criterion")))
 # wf-4ce41a599a
 
 
-## 4. Gene set activity calculation
+## 4. Reordering some criterions pre-run
 ## ===========================================
+th2 = readRDS(get_workflow_outputs("wf-410536ebd3"))
+neuroinflammation = readRDS(get_workflow_outputs("wf-4ce41a599a"))
+epidermis = readRDS(get_workflow_outputs("wf-d3b177cd82"))
+
+epidermis = c(epidermis, th2[c("lichenification","Terminal_Differentiation_and_Lipids")])
+th2 = th2[-which(names(th2) %in% c("lichenification","Terminal_Differentiation_and_Lipids","Th1_Related","Th17_Related","TH22_IL22_Related"))]
+
+## 5. Gene set activity calculation
+## ===========================================
+set.seed(1234)
 criteria = list(th2 = th2,
-                neuroinflammation = neuro,
-                epidermis = epi_pathways)
+                neuroinflammation = neuroinflammation,
+                epidermis = epidermis)
 criteria = lapply(criteria, function(x) lapply(x, unique))
 
 datasets = lapply(ccm$datasets, function(x) {
@@ -158,6 +168,7 @@ datasets = lapply(ccm$datasets, function(x) {
 
 enrichments = lapply(datasets, function(x) readRDS(get_workflow_outputs(x[["object"]][["fits"]][["workflow_id"]], files_names_grepl_pattern = "output.rds")))
 # results are different in values than the original ones but the rank is identical. differences are probably due to seed or something similar.
+# notice this is on cytocc so might take a little time
 
 enrichments = lapply(enrichments, function(x){
   lapply(x$assay_data, function(submodel){
@@ -170,12 +181,13 @@ enrichments = lapply(enrichments, purrr::transpose)
 enrichments = purrr::transpose(enrichments)
 pushToCC(enrichments, tagsToPass = list(list(name="object",value="th2_enrichments")))
 # wf-6f7bab48d9
+# wf-7ed6eff409 - rearrange lists
 
 enrich_exprssionSet_bulk = lapply(enrichments, function(x) lapply(x, function(y) ExpressionSet(y[["exprs"]])))
 enrich_exprssionSet_adj = lapply(enrichments, function(x) lapply(x, function(y) ExpressionSet(y[["exprs_adjusted__1__1"]])))
 
 
-## 5. Meta PC calculation
+## 6. Meta PC calculation
 ## ===========================================
 library(cytoreason.integration)
 
@@ -195,7 +207,12 @@ calc_metaPCs = function(pathways) {
 }
 
 metaPCs_bulk = lapply(enrich_exprssionSet_bulk, calc_metaPCs)
+# wf-01abdfcd8d
+# wf-4ced0fb3d9 - rearrange lists
 metaPCs_adj = lapply(enrich_exprssionSet_adj, calc_metaPCs)
+# wf-0803da8862
+# wf-89fcefafc6 - rearrange lists
+
 
 # Extract sample scores
 extract_sampleScores = function(res) {
@@ -208,8 +225,10 @@ extract_sampleScores = function(res) {
 
 sampleScores_bulk = lapply(metaPCs_bulk, extract_sampleScores)
 # wf-a7ac64d7d6
+# wf-e6c43f2c55 - rearrange lists
 sampleScores_adj = lapply(metaPCs_adj, extract_sampleScores)
 # wf-f76769a6b6
+# wf-40fbd742a3 - rearrange lists
 
 
 # Extract pathway loadings
@@ -237,8 +256,10 @@ process = function(df, submodel, term, collection){
 
 pathwayLoadings_bulk = lapply(names(pathwayLoadings_bulk), function(x) process(pathwayLoadings_bulk[[x]], "bulk", NA, x)) %>% do.call(rbind,.)
 # wf-9ba68682c9
+# wf-60ab388266 - rearrange lists
 pathwayLoadings_adj = lapply(names(pathwayLoadings_adj), function(x) process(pathwayLoadings_adj[[x]], "adjusted__1__1", NA, x)) %>% do.call(rbind,.)
 # wf-9cc5e483e3
+# wf-dde17f906e - rearrange lists
 
 uploadToBQ(pathwayLoadings_bulk, bqdataset = "s05_atopic_dermatitis", tableName = "pathwayLoadings", disposition = "WRITE_APPEND")
 uploadToBQ(pathwayLoadings_adj, bqdataset = "s05_atopic_dermatitis", tableName = "pathwayLoadings", disposition = "WRITE_APPEND")

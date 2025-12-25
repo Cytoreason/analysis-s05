@@ -12,6 +12,22 @@ Metadata = lapply(get_workflow_outputs("wf-fa2180d0c7"), readRDS)
 CellMetadata = Metadata[[1]]
 uploadToBQ(CellMetadata, bqdataset = "s05_atopic_dermatitis", tableName = "dashboards_CellMetadata")
 
+# for pathway, integrate new pathways from CCM
+PathwayMetadata = Metadata[[1]]
+dz = downloadFromBQ(bqdataset = "s05_atopic_dermatitis", tableName = "AD_gx_gsa")
+dz = dz[-which(dz$pathway %in% PathwayMetadata$pathway),]
+dz = dz[which(dz$collection %in% c("btm","neuroinflammation", "th2","Ligands","Positives","Neuronal")),]
+dz = dz %>%
+  mutate(DZ.change = case_when(FDR > 0.05 ~ "Unchanged",
+                               FDR <= 0.05 & NES > 0 ~ "Up",
+                               FDR <= 0.05 & NES < 0 ~ "Down")) %>%
+  dplyr::rename(neglog10FDR = log10_fdr) %>%
+  mutate(adjusted = ifelse(submodel == "bulk", "no", "yes")) %>%
+  mutate(Key.Pathway = NA, Pathway.level = NA, PipelineWF = "wf-3e419ff83b", Disease = "AD") %>%
+  dplyr::select(pathway, collection,Pathway.level,NES,neglog10FDR,DZ.change,adjusted,Key.Pathway,Disease,PipelineWF)
+
+PathwayMetadata = rbind(PathwayMetadata, dz)
+uploadToBQ(PathwayMetadata, bqdataset = "s05_atopic_dermatitis", tableName = "dashboards_PathwayMetadata")
 
 
 ## 1. Scores
@@ -65,4 +81,15 @@ target_cell = target_cell %>%
 uploadToBQ(target_cell, bqdataset = "s05_atopic_dermatitis", tableName = "dashboards_target_cell")
 
 
-## 
+## Target_Pathway_Correlations
+## =====================================
+target_pathway = downloadFromBQ(bqdataset = "s05_atopic_dermatitis", tableName = "Results_Target_Pathway", pageSize = 20000)
+
+target_pathway = target_pathway %>%
+  dplyr::rename(correlation = metricValue, pathway = Criteria_Identifier, target = Target_Identifier,
+                submodel = Type, target_collection = Target_Collection, collection = Criteria_Collection) %>%
+  dplyr::select(target, submodel, fdr, pathway, target_collection, correlation, collection) %>%
+  mutate(fdr = -log10(fdr)) %>%
+  mutate(submodel = ifelse(submodel == "bulk", "bulk", "adjusted"))
+
+uploadToBQ(target_pathway, bqdataset = "s05_atopic_dermatitis", tableName = "dashboards_target_pathway")

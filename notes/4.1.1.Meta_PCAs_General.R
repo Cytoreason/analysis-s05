@@ -91,7 +91,7 @@ run_function_dist(FUN = function(ccm_wfid){
   names(allKeyPathways) = unique(names(ccm$meta)[1:4])
   return(allKeyPathways)
 }, 
-ccm_wfid = "wf-08a6a0a503", # new disease model, including adjustment to keratinocytes
+ccm_wfid = "wf-08a6a0a503",
 image = "eu.gcr.io/cytoreason/ci-cytoreason.ccm.pipeline-package:develop_latest", 
 tags = list(list(name="analysis",value="pathway_metaPCA_allTerms")))
 # wf-ee9a8f05a7 - bulk

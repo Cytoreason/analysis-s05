@@ -95,13 +95,13 @@ uploadToBQ <- function(table, bqdataset, tableName, subsetting = NULL, dispositi
 #' @description downloadFromBQ gets workflow IDs and uploads them to bigquery
 #' @param bqdataset - name of dataset in BQ we want to download from
 #' @param tableName - the table name we want extract from BQ
-downloadFromBQ <- function(bqdataset, tableName){
+downloadFromBQ <- function(bqdataset, tableName, pageSize = NULL){
   library(bigrquery)
   
   tbl <- bq_table("cytoreason", bqdataset, tableName)
   
   out <- tryCatch(
-    bq_table_download(tbl),
+    bq_table_download(tbl, page_size = pageSize),
     error = function(e) stop("BigQuery download failed: ", conditionMessage(e), call. = FALSE)
   )
   return(out)
