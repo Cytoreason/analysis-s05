@@ -93,3 +93,31 @@ target_pathway = target_pathway %>%
   mutate(submodel = ifelse(submodel == "bulk", "bulk", "adjusted"))
 
 uploadToBQ(target_pathway, bqdataset = "s05_atopic_dermatitis", tableName = "dashboards_target_pathway")
+
+
+## Pathway volcano
+## ==========================
+dz = downloadFromBQ(bqdataset = "s05_atopic_dermatitis", tableName = "AD_gx_gsa")
+dz = dz %>%
+  dplyr::filter(!collection %in% c("c2.cgp","c2.cp","c2.cp.biocarta","c2.cp.kegg", "c2.cp.reactome","c3.tft","c7","epidermis","Neuronal","Mast","Itch")) %>%
+  mutate(collection = ifelse(pathway %in% c("Terminal_Differentiation_and_Lipids", "lichenification"), "epidermis",collection))
+
+treatments = downloadFromBQ(bqdataset = "s05_atopic_dermatitis", tableName = "treatment_PrePostDupi")
+treatments = treatments %>%
+  dplyr::filter(!collection %in% c("c2.cgp","c2.cp","c2.cp.biocarta","c2.cp.kegg", "c2.cp.reactome","c3.tft","c7","epidermis","Neuronal","Mast","Itch")) %>%
+  mutate(collection = ifelse(pathway %in% c("Terminal_Differentiation_and_Lipids", "lichenification"), "epidermis",collection)) %>%
+  dplyr::filter(term %in% c("W4_vs_W0:NR_L", "W4_vs_W0:R_L", "W16_vs_W0:NR_L", "W16_vs_W0:R_L", "W4_vs_W0:DupilumabL", "W16_vs_W0:DupilumabL"))
+
+mapping = c("W4_vs_W0:NR_L" = "W4_vs_W0:Dupilumab:Non-Responders:Lesional", 
+            "W4_vs_W0:R_L" = "W4_vs_W0:Dupilumab:Responders:Lesional", 
+            "W16_vs_W0:NR_L" = "W16_vs_W0:Dupilumab:Non-Responders:Lesional", 
+            "W16_vs_W0:R_L" = "W16_vs_W0:Dupilumab:Responders:Lesional", 
+            "W4_vs_W0:DupilumabL" = "W4_vs_W0:Dupilumab:Lesional", 
+            "W16_vs_W0:DupilumabL" = "W16_vs_W0:Dupilumab:Lesional")
+treatments$term = mapping[match(treatments$term, names(mapping))]
+
+joined = bind_rows(dz, treatments)
+joined = joined %>%
+  dplyr::select(term, pathway, collection, submodel, NES, log10_fdr)
+
+uploadToBQ(joined, bqdataset = "s05_atopic_dermatitis", tableName = "dashboards_volcano_DiseaseAndDupilumab")

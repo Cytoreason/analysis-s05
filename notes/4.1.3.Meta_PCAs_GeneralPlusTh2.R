@@ -16,11 +16,33 @@ th2_enrichments$exprs <- Map(rbind, th2_enrichments$exprs$th2,
 th2_enrichments$exprs_adjusted__1__1 <- Map(rbind, th2_enrichments$exprs_adjusted__1__1$th2, 
                                             th2_enrichments$exprs_adjusted__1__1$neuroinflammation,
                                             th2_enrichments$exprs_adjusted__1__1$epidermis)
+paths = rownames(th2_enrichments$exprs$GSE107361__GPL570)
 
+enrichedInDisease = downloadFromBQ(bqdataset = "s05_atopic_dermatitis", tableName = "AD_gx_gsa")
+enrichedInDisease = enrichedInDisease[-which(enrichedInDisease$collection %in% c("Neuronal","Itch")),]
+enrichedInDisease = enrichedInDisease %>%
+  dplyr::filter(pathway %in% paths) %>%
+  dplyr::filter(term %in% c("L_vs_HC","DZ_vs_HC")) %>%
+  dplyr::filter(!collection %in% c("Neuronal","Itch")) %>%
+  dplyr::filter(FDR <= 0.05) %>% 
+  dplyr::mutate(ID = paste0(collection,":", pathway)) %>%
+  dplyr::select(submodel, term, ID, pathway)
+
+pushToCC(enrichedInDisease, tags = list(list(name="object",value="th2_pathways_enriched_in_disease")))
+# wf-fbb04343d3
+
+enrichedInDisease = split(enrichedInDisease, enrichedInDisease$submodel)
+
+th2_enrichments$exprs = lapply(th2_enrichments$exprs, function(x) x[which(rownames(x) %in% enrichedInDisease$bulk$pathway),])
+th2_enrichments$exprs_adjusted__1__1 = lapply(th2_enrichments$exprs_adjusted__1__1, function(x) x[which(rownames(x) %in% enrichedInDisease$adjusted$pathway),])
+# We see that in adjusted the pathways are the same for both terms, and in bulk DZ_vs_HC is missing neuroinflammation:NTF4
+
+pushToCC(th2_enrichments, tags = list(list(name="object",value="th2_pathways")))
+# wf-b2132fba22
 
 ## Calculate key pathways PCA
 ## ==========================================
-run_function_dist(FUN = function(ccm_wfid, th2_enrichments){
+run_function_dist(FUN = function(ccm_wfid, th2_enrichments_wfid){
   library(cytoreason.ccm.pipeline)
   library(cytoreason.integration)
   library(dplyr)
@@ -54,18 +76,26 @@ run_function_dist(FUN = function(ccm_wfid, th2_enrichments){
         library(cytoreason.ccm.pipeline)
         library(dplyr)
       })
-      clusterExport(cl, varlist = c("ccm","keyPathways","submodel","th2_enrichments"), envir = environment())
+      clusterExport(cl, varlist = c("ccm","keyPathways","submodel","effect","th2_enrichments_wfid"), envir = environment())
       
       pathways <- parLapply(cl, ccm$datasets, function(d){
-        x = analysisResultExpressionSet(d, "gene_set_activity") %>%
-          .[keyPathways$ID,]
+        x = analysisResultExpressionSet(d, "gene_set_activity")
+        x = x[keyPathways$ID,]
         keep = ifelse(submodel == "bulk", "exprs", paste0("exprs_",submodel))
         
-        new_exprs = rbind(assayData(x)[[keep]], th2_enrichments[[keep]][[x@experimentData@title]])
-        fd_new <- rbind(fData(x), as.data.frame(matrix(NA, nrow = nrow(th2_enrichments[[keep]][[x@experimentData@title]]), 
-                                                       ncol = ncol(fData(x)),
-                                                       dimnames = list(rownames(th2_enrichments[[keep]][[x@experimentData@title]]), colnames(fData(x))))))
+        th2_enrichments = readRDS(get_workflow_outputs("wf-b2132fba22"))
         
+        if(submodel == "bulk" & effect == "AD") {
+          th2 <- lapply(th2_enrichments[[keep]], function(y) return(y[-which(rownames(y) == "NTF4"),]))
+        } else {
+          th2 = th2_enrichments[[keep]]
+        }
+        
+        new_exprs = rbind(assayData(x)[[keep]], th2[[x@experimentData@title]])
+        fd_new <- rbind(fData(x), as.data.frame(matrix(NA, nrow = nrow(th2[[x@experimentData@title]]), 
+                                                       ncol = ncol(fData(x)),
+                                                       dimnames = list(rownames(th2[[x@experimentData@title]]), colnames(fData(x))))))
+
         x2 <- ExpressionSet(
           assayData   = new_exprs,
           phenoData   = phenoData(x),
@@ -93,17 +123,19 @@ run_function_dist(FUN = function(ccm_wfid, th2_enrichments){
   names(allKeyPathways) = c("AD","L_vs_HC")
   return(allKeyPathways)
 }, 
-ccm_wfid = "wf-08a6a0a503", # new disease model, including adjustment to keratinocytes
-th2_enrichments = th2_enrichments,
+ccm_wfid = "wf-08a6a0a503",
+th2_enrichments_wfid = "wf-b2132fba22",
+memory_request = "60Gi",
 image = "eu.gcr.io/cytoreason/ci-cytoreason.ccm.pipeline-package:develop_latest", 
 tags = list(list(name="analysis",value="pathway_metaPCA_allTerms_plusTh2")))
 # wf-113e6defe3
 # wf-1233696939 - rearrange lists
+# wf-e23dc30c35 - using only th2 that change in disease
 
 
 ## Extraction
 ## ==========================================
-keyPathways_wfid = "wf-1233696939"
+keyPathways_wfid = "wf-e23dc30c35"
 metaPCA_pathways = readRDS(get_workflow_outputs(keyPathways_wfid))
 
 
@@ -144,6 +176,7 @@ sampleScores_all = lapply(names(metaPCA_pathways), function(term){
 pushToCC(sampleScores_all, tagsToPass = list(list(name="analysis",value="pathway_meta_pca_keyWithTh2")))
 # wf-6dba8d483f
 # wf-c4b6c8d817
+# wf-3fce829a35
 
 ## Pathway loadings
 ## --------------------
@@ -174,9 +207,10 @@ pathwayLoadings_all = unique(pathwayLoadings_all)
 pathLoadings.BQ = pathwayLoadings_all %>%
   dplyr::select(-c(1:3))
 colnames(pathLoadings.BQ) = c("Pathway","PC","Loading","Term","Submodel","Collection")
-pushToCC(pathLoadings.BQ, tagsToPass = list(list(name="analysis",value="pathway_meta_pca_loadings_keyWithTh2")))
+pushToCC(pathLoadings.BQ, tagsToPass = list(list(name="object",value="pathway_meta_pca_loadings_keyWithTh2")))
 # wf-454d12aa31
 # wf-880b3f8483
+# wf-25cea04750
 uploadToBQ(pathLoadings.BQ, bqdataset = "s05_atopic_dermatitis", tableName = "pathwayLoadings", disposition = "WRITE_APPEND")
 
 

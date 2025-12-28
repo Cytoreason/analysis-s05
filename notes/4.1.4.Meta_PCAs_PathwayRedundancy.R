@@ -21,36 +21,60 @@ run_function_dist(FUN = function(ccm_wfid, nonRedundantPathways){
   
   ccm = as_ccm_fit(ccm_wfid)
   config <- modelMetadata(ccm)
-  allKeyPathways = lapply(unique(names(ccm$meta)[1:4]), function(effect){
+  allKeyPathways = lapply(c("AD","L_vs_HC"), function(effect){
     allSubmodels = lapply(c("bulk","adjusted__1__1"), function(submodel){
       cat("\nComputing:",effect,submodel,"\n")
+      keyPathways <- build_service_result_tables(ccm$meta[[effect]]$gx_diff$gx_gsa)
+      keyPathways <- keyPathways[[submodel]]$gsa_enrichment %>% .[c("h", "btm", "kegg", "reactome")]
+      
+      keyPathways = do.call(rbind, 
+                            lapply(names(keyPathways), function(nm) {
+                              df <- keyPathways[[nm]]$gsa_enrichment
+                              df$collection <- nm
+                              if (effect == "AD") { df = df[which(df$term == "DZ_vs_HC"), ]
+                              } else { df = df[which(df$term == effect), ] }
+                              df  }))
+      keyPathways <- keyPathways %>% 
+        dplyr::filter(FDR <= 0.05) %>% 
+        dplyr::mutate(ID = paste0(collection,":", pathway)) %>% 
+        dplyr::select(ID)
       
       cl = makeCluster(length(ccm$datasets))
       clusterEvalQ(cl, {   library(cytoreason.ccm.pipeline) })
-      clusterExport(cl, varlist = c("ccm","nonRedundantPathways"), envir = environment())
+      clusterExport(cl, varlist = c("ccm","nonRedundantPathways","effect","submodel", "keyPathways"), envir = environment())
       
       pathways <- parLapply(cl, ccm$datasets, function(d){
+        # choose key pathways in disease
         x = analysisResultExpressionSet(d, "gene_set_activity")
-        paths = nonRedundantPathways[which(nonRedundantPathways %in% rownames(x))]
-        x = x[paths,]
-        return(x)
+        x = x[keyPathways$ID,]
+        keep = ifelse(submodel == "bulk", "exprs", paste0("exprs_",submodel))
+        
+        # load relevant th2 pathways
+        th2_enrichments = readRDS(get_workflow_outputs("wf-b2132fba22"))
+        if(submodel == "bulk" & effect == "AD") {
+          th2 <- lapply(th2_enrichments[[keep]], function(y) return(y[-which(rownames(y) == "NTF4"),,drop=T]))
+        } else {
+          th2 = th2_enrichments[[keep]]
+        }
+        
+        # create new matrix
+        new_exprs = rbind(assayData(x)[[keep]], th2[[x@experimentData@title]])
+        new_exprs = new_exprs[which(rownames(new_exprs) %in% nonRedundantPathways),,drop=F]
+        
+        fd_new <- as.data.frame(matrix(NA, nrow = nrow(new_exprs), 
+                                       ncol = ncol(fData(x)),
+                                       dimnames = list(rownames(new_exprs), colnames(fData(x)))))
+        
+        x2 <- ExpressionSet(
+          assayData   = new_exprs,
+          phenoData   = phenoData(x),
+          featureData = AnnotatedDataFrame(fd_new),
+          annotation  = annotation(x)
+        )
+        return(x2)
       })
       stopCluster(cl)
-      
-      # Choose the correct assay
-      keep = ifelse(submodel == "bulk", "exprs", paste0("exprs_",submodel))
-      
-      m <- lapply(pathways, function(x) assayDataElement(x, keep))
-      
-      # Replace assayData with ONLY that assay (same name preserved)
-      pathways = lapply(names(pathways), function(x) {
-        d = pathways[[x]]
-        assayData(d) <- do.call(assayDataNew, c(list("environment"), 
-                                                setNames(list(m[[x]]), "exprs")))
-        return(d)
-      })
-      names(pathways) = names(ccm$datasets)
-      
+
       # Get the data for the meta-PCA train datasets (as defined in the config file):
       pathways.train <- pathways[config$dataset_id[which(config$ccm_meta_pca == 1)]]
       
@@ -65,19 +89,21 @@ run_function_dist(FUN = function(ccm_wfid, nonRedundantPathways){
     names(allSubmodels) = c("bulk","adjusted__1__1")
     return(allSubmodels)
   })
-  names(allKeyPathways) = unique(names(ccm$meta)[1:4])
+  names(allKeyPathways) = c("AD","L_vs_HC")
   return(allKeyPathways)
 }, 
-ccm_wfid = "wf-5029aba66f",
+ccm_wfid = "wf-08a6a0a503",
 nonRedundantPathways = nonRedundantPathways,
+memory_request = "60Gi",
 image = "eu.gcr.io/cytoreason/ci-cytoreason.ccm.pipeline-package:develop_latest", 
 tags = list(list(name="analysis",value="pathwayRedundancy_metaPCA_allTerms")))
 # wf-5029aba66f
+# wf-4674be8ff1
 
 
 ## Extraction
 ## ==========================================
-keyPathways_wfid = "wf-5029aba66f"
+keyPathways_wfid = "wf-4674be8ff1"
 metaPCA_pathways = readRDS(get_workflow_outputs(keyPathways_wfid))
 
 ## Scores
@@ -118,7 +144,7 @@ sampleScores_all = lapply(names(metaPCA_pathways), function(term){
   }) %>% bind_rows()
 }) %>% bind_rows()
 pushToCC(sampleScores_all, tagsToPass = list(list(name="analysis",value="unredundant_pathway_meta_pca")))
-# wf-e4ecef5c07
+# wf-64e555ed8f
 
 
 ## Pathway loadings
@@ -152,5 +178,5 @@ pathLoadings.BQ = pathwayLoadings_all %>%
 colnames(pathLoadings.BQ) = c("Pathway","PC","Loading","Term","Submodel","Collection")
 uploadToBQ(pathLoadings.BQ, bqdataset = "s05_atopic_dermatitis", tableName = "pathwayLoadings", disposition = "WRITE_APPEND")
 pushToCC(pathLoadings.BQ, tagsToPass = list(list(name="analysis",value="unredundant_pathway_meta_pca_loadings")))
-# wf-9b347f5424
+# wf-2236a96045
 
