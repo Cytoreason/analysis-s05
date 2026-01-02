@@ -13,7 +13,6 @@ signatureMapping = readRDS(get_workflow_outputs("wf-aa75ed069b"))
 # 1. gx_gsa
 # ------------------------------------
 # From disease model
-
 gxgsa_dm = rbind(statistic_table(ccm_dm$meta$L_vs_NL$gx_diff$gx_gsa),
               statistic_table(ccm_dm$meta$AD$gx_diff$gx_gsa),
               statistic_table(ccm_dm$meta$L_vs_HC$gx_diff$gx_gsa),

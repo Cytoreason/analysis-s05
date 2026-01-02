@@ -154,10 +154,10 @@ targetColors = c(
   # "IL26" = "#95c74d",
   # "IFNG" = "#1C7771",
   
-  "X2:x2_general_inhibition_early_50" = "#E1B1E1",
+  "X2:x2_activation_early_50_archs_refined" = "#E1B1E1",
   "X2:x2_general_inhibition_early_50_archs_refined" = "#c4007c",
-  "X2:SP_general_inhibition_late_50" = "#df9aa0",
-  "X2:SP_general_inhibition_late_50_archs_refined" = "#CD5C5C",
+  "X2:x2_activated_inhibition_early_50_archs_refined" = "#df9aa0",
+  # "X2:SP_general_inhibition_late_50_archs_refined" = "#CD5C5C",
 
   # # yellows 
   # "CTLA4" = "#FFF176",

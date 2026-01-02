@@ -7,7 +7,7 @@ devtools::load_all("~/analysis-s05/R/utils.R")
 library(cytoreason.ccm.pipeline) # make sure to load version >= 1.0.1
 library(tidyverse)
 
-ccm_wfid = "wf-3e419ff83b"
+ccm_wfid = "wf-abde4bfab0"
 
 collectionMapping = readRDS(get_workflow_outputs("wf-3df1530237"))
   collectionMapping$collection[str_detect(collectionMapping$collection, "Negative|negative")] <- "negativeControls"
@@ -89,6 +89,7 @@ image = "eu.gcr.io/cytoreason/ci-cytoreason.ccm.pipeline-package:master_latest")
 # wf-a09930b845
 # wf-66f108f616
 # wf-345bf31e4e
+# wf-182d0335f5
 
 Results = readRDS(get_workflow_outputs("wf-345bf31e4e"))
 
@@ -202,7 +203,7 @@ run_function_dist(FUN = function(results_wfid){
   Results = lapply(names(Results), function(dataName) processResults(data = Results[[dataName]], tableName = dataName))
   return(Results)
 }, 
-results_wfid = "wf-345bf31e4e",
+results_wfid = "wf-182d0335f5",
 memory_request = "25Gi")
 # wf-f0959d74d1
 # wf-921cf942af
@@ -215,8 +216,9 @@ memory_request = "25Gi")
 # wf-9579f7fe45 - without correlation to cell meta pcs
 # wf-3c09cc81dd
 # wf-62e5f0bcba
+# wf-ef478fadc9 (final version)
 
-Results = readRDS(get_workflow_outputs(get_workflow("wf-62e5f0bcba", wait = T)))
+Results = readRDS(get_workflow_outputs(get_workflow("wf-ef478fadc9", wait = T)))
 Results = list(DZEnrichment = Results[[1]],
                Target_Cell = Results[[2]][which(Results[[2]]$DataType == "Target_Cell"),],
                Target_Gene = Results[[2]][which(Results[[2]]$DataType == "Target_Gene"),],
@@ -242,20 +244,26 @@ pushToCC(Results, tagsToPass = list(list(name="object",value="processed_results"
 # wf-cd3c366c62
 # wf-1bea2eb00f
 # wf-64470d2a55
+# wf-47f2a1c1b7 (final version)
 
-uploadToBQ(Results$DZEnrichment, bqdataset = "s05_atopic_dermatitis", tableName = "Results_DZEnrichment")
-uploadToBQ(Results$Target_Cell, bqdataset = "s05_atopic_dermatitis", tableName = "Results_Target_Cell")
-uploadToBQ(Results$Target_Gene, bqdataset = "s05_atopic_dermatitis", tableName = "Results_Target_Gene")
-uploadToBQ(Results$Target_Pathway, bqdataset = "s05_atopic_dermatitis", tableName = "Results_Target_Pathway")
-uploadToBQ(Results$Target_MS, bqdataset = "s05_atopic_dermatitis", tableName = "Results_Target_MS")
-uploadToBQ(Results$Target_CS, bqdataset = "s05_atopic_dermatitis", tableName = "Results_Target_CS")
-uploadToBQ(Results$Target_Cell_PCA, bqdataset = "s05_atopic_dermatitis", tableName = "Results_Cell_PCA")
+
+
+# For all tables but Results_Pathway_PCA we use the previous version in order to have Th1_Related, Th17_Related, Th2_Related
 uploadToBQ(Results$Target_Pathway_PCA, bqdataset = "s05_atopic_dermatitis", tableName = "Results_Pathway_PCA")
+
+Results_old = readRDS(get_workflow_outputs("wf-64470d2a55"))
+uploadToBQ(Results_old$DZEnrichment, bqdataset = "s05_atopic_dermatitis", tableName = "Results_DZEnrichment")
+uploadToBQ(Results_old$Target_Cell, bqdataset = "s05_atopic_dermatitis", tableName = "Results_Target_Cell")
+uploadToBQ(Results_old$Target_Gene, bqdataset = "s05_atopic_dermatitis", tableName = "Results_Target_Gene")
+uploadToBQ(Results_old$Target_Pathway, bqdataset = "s05_atopic_dermatitis", tableName = "Results_Target_Pathway")
+uploadToBQ(Results_old$Target_MS, bqdataset = "s05_atopic_dermatitis", tableName = "Results_Target_MS")
+uploadToBQ(Results_old$Target_CS, bqdataset = "s05_atopic_dermatitis", tableName = "Results_Target_CS")
+uploadToBQ(Results_old$Target_Cell_PCA, bqdataset = "s05_atopic_dermatitis", tableName = "Results_Cell_PCA")
 
 
 ## Outside run of meta correlations to SCORAD
 ## -------------------------------------------------
-signatureMapping = readRDS(get_workflow_outputs("wf-0cb82886cc"))
+signatureMapping = readRDS(get_workflow_outputs("wf-aa75ed069b"))
 ccm_scorad = as_ccm_fit("wf-b1d96b1738") # the meta analysis is not good enough
 # SCORAD = build_service_result_tables(ccm_scorad$meta$L_vs_NL$pheno_feature_correlations, term = "L",
 #            subset = ~(collection %in% c("h","kegg","reactome","btm","X2","epidermis","neuroinflammation","negativeControls","th2")))

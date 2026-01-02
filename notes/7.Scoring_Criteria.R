@@ -8,92 +8,120 @@ library(scales, include.only = "rescale")
 scaling = function(scale_vector, min_val = 0.1, max_val = 1) {
   rescale(x = scale_vector, to = c(min_val, max_val))
 }
+keep_signatures = openxlsx::read.xlsx("~/analysis-s05/data/Final signatures to be ranked or viewed in the dashboards.xlsx")
+signatureMapping = readRDS(get_workflow_outputs("wf-aa75ed069b"))
 
 
 ## Pre-processing the results to include only the signatures and criteria we want
 ## ====================================================================================
-Results = readRDS(get_workflow_outputs("wf-e0db493d42"))
-Results = bind_rows(Results) %>%
-  dplyr::filter(!Target.Collection %in% c("Ligands","Mast","Itch","Neuronal")) %>%
-  dplyr::filter(!str_detect(Target.Identifier, c("insilico|x2_|PAMP|CST|SP|BMP7|Icatibant|X2 late activation|X2 early activated|X2 early activation"))) %>%
-  dplyr::filter(!Target.Identifier == "X2 late inhibition")
+# For all scores but Results_Pathway_PCA we use the previous version in order to have Th1_Related, Th17_Related, Th2_Related
+Results_old = readRDS(get_workflow_outputs("wf-47f2a1c1b7"))
+Results_old = bind_rows(Results_old[-which(names(Results_old) == "Target_Pathway_PCA")])
+
+Results = bind_rows(readRDS(get_workflow_outputs("wf-47f2a1c1b7"))[["Target_Pathway_PCA"]],
+                    Results_old) %>%
+  dplyr::filter(Target.Identifier %in% keep_signatures$Target[which(keep_signatures$Exploration == "Yes")])
 
 Results$DataType[which(Results$Type == "adjusted__1__1")] = paste0("Adj ", Results$DataType[which(Results$Type == "adjusted__1__1")])
 Results$PC[which(str_detect(Results$DataType, "PCA"))] = sapply(Results$Criteria.Identifier[which(str_detect(Results$DataType, "PCA"))], function(y) strsplit(y,"pc")[[1]][2])
 Results$DataType[which(str_detect(Results$DataType, "PCA"))] = paste0(str_replace(Results$DataType[which(str_detect(Results$DataType, "PCA"))], "PCA","PC"),Results$PC[which(str_detect(Results$DataType, "PCA"))])
 Results$DataType[which(Results$DataType == "Target_CS")] = paste0("Target_CS_",Results$Criteria.Identifier[which(Results$DataType == "Target_CS")])
 Results = Results[-which(str_detect(Results$DataType,"Target_Pathway_PC") & 
-                         Results$Type == "bulk" & 
-                         str_detect(Results$Criteria.Identifier,"adj_")),]
+                           Results$Type == "bulk" & 
+                         str_detect(Results$Criteria.Identifier,"_adjusted")),]
 Results = Results[-which(str_detect(Results$DataType,"Target_Pathway_PC") & 
-                         Results$Type == "adjusted__1__1" & 
-                         str_detect(Results$Criteria.Identifier,"(?<!_)pathway")),]
+                           Results$Type == "adjusted__1__1" & 
+                         str_detect(Results$Criteria.Identifier,"_bulk")),]
 
-chosenCriteria = c("Enrichment in L_vs_HC" = "Enrichment in L_vs_HC",
-                   "Enrichment in NL_vs_HC" = "Enrichment in NL_vs_HC",
-                   "Enrichment in L_vs_NL (Adjusted)" = "Adj Enrichment in L_vs_NL",
-                   "Enrichment in L_vs_HC (Adjusted)" = "Adj Enrichment in L_vs_HC",
-                   "Correlation with Pathway Meta PC1"  = "Target_Pathway_PC1",
-                   "Correlation with Pathway Meta PC2"  = "Target_Pathway_PC2",
-                   "Correlation with Pathway Meta PC1 (Adjusted)"  = "Adj Target_Pathway_PC1",
-                   "Correlation with EASI"  = "Target_CS_EASI")
+chosenCriteria = c("Disease Enrichment in L_vs_HC" = "Enrichment in L_vs_HC",
+                   "Disease Enrichment in NL_vs_HC" = "Enrichment in NL_vs_HC",
+                   "Disease Enrichment in L_vs_NL (Adjusted)" = "Adj Enrichment in L_vs_NL",
+                   "Disease Enrichment in L_vs_HC (Adjusted)" = "Adj Enrichment in L_vs_HC",
+                   "Inflammation"  = "Target_Pathway_PC1_DZ_vs_HC_bulk_keyWithTh2",
+                   "Immune Cell Activation"  = "Target_Pathway_PC2_DZ_vs_HC_bulk_keyWithTh2",
+                   "Proliferation and Cell Cycle"  = "Adj Target_Pathway_PC1_DZ_vs_HC_adjusted_keyWithTh2",
+                   "Correlation to EASI"  = "Target_CS_EASI")
 
 Results_filtered = Results[which(Results$DataType %in% chosenCriteria),-13]
 Results_filtered$Criteria.Identifier = names(chosenCriteria)[match(Results_filtered$DataType, chosenCriteria)]
+# flip sign
+idx = which(Results_filtered$Criteria.Identifier == "Proliferation and Cell Cycle")
+Results_filtered$metricValue[idx] = (-1) * Results_filtered$metricValue[idx]
+
+pushToCC(Results_filtered)
 # wf-563b1691b5
+# wf-45bed4e3de
 
-# Add correlation to median th2, epidermis, neuroinflammation as criteria
-Results_th2 = readRDS(get_workflow_outputs("wf-64470d2a55"))
-Results_th2 = Results_th2$Target_Pathway %>%
-  dplyr::filter(!Target.Collection %in% c("Ligands","Mast","Itch","Neuronal","th2", "epidermis", "neuroinflammation")) %>%
-  dplyr::filter(!str_detect(Target.Identifier, c("insilico|x2_|PAMP|CST|SP|BMP7|Icatibant|X2 late activation|X2 early activated|X2 early activation"))) %>%
-  dplyr::filter(!Target.Identifier == "X2 late inhibition") %>%
-  dplyr::filter(Criteria.Collection %in% c("th2", "epidermis", "neuroinflammation"))
-Results_th2$Criteria.Collection[which(Results_th2$Criteria.Identifier %in% c("th2:lichenification","th2:Terminal_Differentiation_and_Lipids"))] <- "epidermis"
-Results_th2$Criteria.Identifier <- str_replace(Results_th2$Criteria.Identifier, "th2:lichenification", "epidermis:lichenification")
-Results_th2$Criteria.Identifier <- str_replace(Results_th2$Criteria.Identifier, "th2:Terminal_Differentiation_and_Lipids", "epidermis:Terminal_Differentiation_and_Lipids")
 
-pathwaysToNotFlipSign = c("epidermis:reactome__Asymmetric localization of PCP proteins", "epidermis:reactome__Differentiation of keratinocytes in interfollicular epidermis in mammalian skin")
-idx = which(Results_th2$Criteria.Collection == "epidermis" & !Results_th2$Criteria.Identifier %in% pathwaysToNotFlipSign & Results_th2$Type == "bulk")
-Results_th2$metricValue[idx] = (-1) * Results_th2$metricValue[idx]
-# wf-8606c24d32
+# Integrate additional criteria
+# ======================================
+additional_criteria = readRDS(get_workflow_outputs("wf-7a1d7b9ecb"))
+additional_criteria = additional_criteria[which(additional_criteria$Type == "bulk"),]
+# wf-fdba9ddeaf
 
-# # Integrate network criteria
-# topology = readRDS(get_workflow_outputs("wf-8556686d74"))
-# topology = topology %>%
-#   mutate(DataType = "Network Density") %>%
-#   dplyr::filter(Type == "bulk") %>%
-#   dplyr::filter(Target.ID %in% unique(Results_filtered$Target.ID)) %>%
-#   mutate(pvalue = ifelse(pvalue == 0, 1/1001, pvalue)) %>%
-#   mutate(fdr = p.adjust(pvalue, method = "fdr")) %>%
-#   mutate(log10_fdr = -log10(fdr))
-#   
-# 
-# centrality = readRDS(get_workflow_outputs("wf-72d490c885"))
-# centrality = centrality %>%
-#   mutate(DataType = "Network Centrality") %>%
-#   dplyr::filter(Type == "bulk") %>%
-#   dplyr::filter(Criteria.Identifier == "eigen_centrality_median") %>%
-#   dplyr::filter(Target.ID %in% unique(Results_filtered$Target.ID)) %>%
-#   mutate(pvalue = ifelse(pvalue == 0, 1/1001, pvalue)) %>%
-#   mutate(fdr = p.adjust(pvalue, method = "fdr")) %>%
-#   mutate(log10_fdr = -log10(fdr))
-# 
-# allCriteria = bind_rows(Results_filtered, topology, centrality)
-# pushToCC(allCriteria, tagsToPass = list(list(name="object",value="allCriteria")))
-# # wf-fc0d0d2464
+scorad = downloadFromBQ(bqdataset = "s05_atopic_dermatitis", tableName = "Results_Target_SCORAD")
+scorad = scorad %>%
+  dplyr::filter(dataset == "GSE130588__GPL570") %>%
+  dplyr::filter(Target_Identifier %in% keep_signatures$Target[which(keep_signatures$Ranking == "Yes")]) %>%
+  dplyr::select(-n_observation,-dataset) %>%
+  mutate(DataType = "Target_CS_SCORAD", hit = NA)
+colnames(scorad) = str_replace(colnames(scorad),"_",".")
+colnames(scorad)[which(colnames(scorad) == "log10.fdr")] = "log10_fdr"
+scorad$Criteria.Identifier = "Correlation to SCORAD"
+
+scorad$Target.ID = signatureMapping$ID[match(scorad$Target.ID, signatureMapping$previousID)]
+# wf-426aa560ee
+
+# Integrate network criteria
+# ======================================
+topology = readRDS(get_workflow_outputs("wf-8556686d74"))
+topology = topology %>%
+  mutate(DataType = "Network Density") %>%
+  dplyr::filter(Type == "bulk") %>%
+  dplyr::filter(Target.ID %in% unique(Results_filtered$Target.ID)) %>%
+  mutate(pvalue = ifelse(pvalue == 0, 1/1001, pvalue)) %>%
+  mutate(fdr = p.adjust(pvalue, method = "fdr")) %>%
+  mutate(log10_fdr = -log10(fdr)) %>%
+  mutate(Criteria.Identifier = "AD Network Density")
+
+
+centrality = readRDS(get_workflow_outputs("wf-72d490c885"))
+centrality = centrality %>%
+  mutate(DataType = "Network Centrality") %>%
+  dplyr::filter(Type == "bulk") %>%
+  dplyr::filter(Criteria.Identifier == "eigen_centrality_median") %>%
+  dplyr::filter(Target.ID %in% unique(Results_filtered$Target.ID)) %>%
+  mutate(pvalue = ifelse(pvalue == 0, 1/1001, pvalue)) %>%
+  mutate(fdr = p.adjust(pvalue, method = "fdr")) %>%
+  mutate(log10_fdr = -log10(fdr)) %>%
+  mutate(Criteria.Identifier = "AD Network Centrality")
+
+network = bind_rows(topology, centrality)
+network$Target.Identifier = signatureMapping$New_identifier[match(network$Target.Identifier, signatureMapping$signature)]
+pushToCC(network, tagsToPass = list(list(name="object",value="network_criteria")))
+# wf-ec34d7ef49
+
+
+## All criteria
+## ====================
+Results_filtered = readRDS(get_workflow_outputs("wf-45bed4e3de"))
+scorad = readRDS(get_workflow_outputs("wf-426aa560ee"))
+additional_criteria = readRDS(get_workflow_outputs("wf-fdba9ddeaf"))
+  additional_criteria$fdr = additional_criteria$log10_fdr = NA # we don't trust it
+network = readRDS(get_workflow_outputs("wf-ec34d7ef49"))
+
+allCriteria = bind_rows(Results_filtered,
+                        scorad,
+                        additional_criteria,
+                        network)
+pushToCC(allCriteria, tagsToPass = list(list(name="object",value="allCriteria")))
+# wf-7bb3d94abc
+# wf-a081e251f2
+# wf-af22471107
 
 
 ## Scaling each criterion
 ## ====================================
-# First we set a threshold for FDR
-Results_filtered$log10_fdr = ifelse(Results_filtered$log10_fdr > 4, 4, Results_filtered$log10_fdr)
-Results_th2$log10_fdr = ifelse(Results_th2$log10_fdr > 4, 4, Results_th2$log10_fdr)
-
-# Multiply FDR and effect
-Results_filtered$score = Results_filtered$metricValue * Results_filtered$log10_fdr
-Results_th2$score = Results_th2$metricValue * Results_th2$log10_fdr
-
 # Almost zero negatives and multiply FDR and effect
 floor_dec <- function(x, k = 2) { # function to take the lowest number above 0 and round it down
   minimal_value = x[which(x > 0)]
@@ -102,27 +130,22 @@ floor_dec <- function(x, k = 2) { # function to take the lowest number above 0 a
   return(x)
 }
 
+allCriteria_chosenTargets = allCriteria[which(allCriteria$Target.Identifier %in% keep_signatures$Target[which(keep_signatures$Ranking == "Yes")]),]
 
-# Per criteria we re-scale between 0.1 and 1
-Results_th2 = Results_th2 %>%
-  group_by(Target.ID, Target.Identifier, Target.Collection, Type, Criteria.Collection, metricType, hit) %>%
-  summarise(metricValue = median(metricValue),
-            fdr = median(fdr),
-            score = median(score)) %>%
-  mutate(log10_fdr = -log10(fdr),
-         Criteria.Identifier = paste0("Median Correlation with ",Criteria.Collection, ifelse(Type == "bulk", ""," (Adjusted)")),
-         DataType = paste0(Criteria.Collection, ifelse(Type == "bulk", ""," (Adjusted)"))) %>%
+# First we set a threshold for FDR
+allCriteria_chosenTargets$log10_fdr = ifelse(allCriteria_chosenTargets$log10_fdr > 4, 4, allCriteria_chosenTargets$log10_fdr)
+
+scores = allCriteria_chosenTargets %>%
+  group_by(Criteria.Identifier) %>%
+  mutate(score = ifelse(is.na(fdr), metricValue, metricValue * log10_fdr)) %>% # because we have NAs in FDR, score is only multiplied when we have it
+  mutate(rounded_score = floor_dec(score)) %>% # zeroing all negative scores
+  mutate(scaled_score_rounded = scaling(rounded_score)) %>% # scaling
   ungroup()
 
-
-scores = rbind(Results_filtered, Results_th2) %>%
-  group_by(DataType) %>%
-  mutate(rounded_effect = ifelse(DataType == "Adj Target_Pathway_PC1", floor_dec(metricValue, 3), floor_dec(metricValue))) %>%
-  mutate(scaled_score = scaling(score)) %>%
-  mutate(scaled_effect = scaling(metricValue)) %>%
-  mutate(scaled_fdr = scaling(log10_fdr)) %>%
-  mutate(scaled_score_rounded = scaling(rounded_effect)) %>%
-  ungroup()
+pushToCC(scores, tagsToPass = list(list(name="object",value="scores")))
+# wf-5b6481c61b
+# wf-4bb07f3ef3
+# wf-86663471a4
 
 scores$Target.ID = factor(scores$Target.ID, ordered = T, levels = names(targetColors))
 
@@ -132,98 +155,20 @@ scores$Target.Identifier <- factor(scores$Target.Identifier,
                       levels = char_levels_in_factor_order,
                       ordered = TRUE)
 
-pushToCC(scores, tagsToPass = list(list(name="object",value="scores_withTh2median")))
-# wf-5b6481c61b
 
 rankings = scores %>%
   group_by(Target.Identifier, Target.ID) %>%
-  summarise(across(c(scaled_score, scaled_effect, scaled_fdr, scaled_score_rounded),
-                   ~ sum(.x, na.rm = TRUE),
-                   .names = "summed_{.col}"),
-            .groups = "drop") %>%
-  mutate(across(starts_with("summed_"), ~ rank(-.x), .names = "rank_{sub('^summed_', '', .col)}"))
+  summarise(summed_scaled_score_rounded = sum(scaled_score_rounded), .groups = "drop") %>%
+  mutate(rank_scaled_score_rounded = rank(-summed_scaled_score_rounded))
 
-pushToCC(rankings, tagsToPass = list(list(name="object",value="rankings_withTh2median")))
+pushToCC(rankings, tagsToPass = list(list(name="object",value="rankings")))
 # wf-13b22e4fd7
+# wf-bbd99922f1
+# wf-0873211b4e
+# wf-22cecea41a
 
 ## Visualization
 ## =======================
-## 1. Based on effect * fdr
-## ---------------------------------
-# Score per criteria
-ggplot(scores, aes(x = Target.Identifier, y = Criteria.Identifier)) +
-  spot.theme +
-  geom_point(aes(size = scaled_score, color = Target.ID))+
-  facet_grid(DataType ~ . ,scales = "free",space = "free")+
-  scale_color_manual(values = targetColors)
-ggsave("~/analysis-s05/figures/Results/scores.png", scale = 1.2, width = 13, height = 8, bg = "white")
-
-
-# Rank
-ggplot(rankings, aes(x = Target.Identifier, y = summed_scaled_score, fill = Target.ID)) +
-  geom_bar(stat = "identity", color = "black") +
-  geom_text(data = function(x) subset(x, rank_scaled_score <= 10), aes(y = 11, label = rank_scaled_score), check_overlap = T) +
-  theme_minimal() +
-  theme(axis.text.x = element_text(angle = 90,hjust = 1, vjust = 0.5)) +
-  ggpubr::border() +
-  scale_fill_manual(values = targetColors) +
-  guides(fill = F) +
-  labs(x = NULL, y = "Summed Scores")
-ggsave("~/analysis-s05/figures/Results/ranking.png", scale = 1, width = 12, height = 6, bg = "white")
-
-
-## 2. Based on effect alone
-## ---------------------------------
-# Score per criteria
-ggplot(scores, aes(x = Target.Identifier, y = Criteria.Identifier)) +
-  spot.theme +
-  geom_point(aes(size = scaled_effect, color = Target.ID))+
-  facet_grid(DataType ~ . ,scales = "free",space = "free")+
-  scale_color_manual(values = targetColors)
-ggsave("~/analysis-s05/figures/Results/scores_byEffect.png", scale = 1.2, width = 13, height = 8, bg = "white")
-
-
-# Rank
-ggplot(rankings, aes(x = Target.Identifier, y = summed_scaled_effect, fill = Target.ID)) +
-  geom_bar(stat = "identity", color = "black") +
-  geom_text(data = function(x) subset(x, rank_scaled_effect <= 10), aes(y = 12, label = rank_scaled_effect), check_overlap = T) +
-  theme_minimal() +
-  theme(axis.text.x = element_text(angle = 90,hjust = 1, vjust = 0.5)) +
-  ggpubr::border() +
-  scale_fill_manual(values = targetColors) +
-  guides(fill = F) +
-  labs(x = NULL, y = "Summed Scores")
-ggsave("~/analysis-s05/figures/Results/ranking_byEffect.png", scale = 1, width = 12, height = 6, bg = "white")
-
-
-
-## 3. Based on FDR alone
-## ---------------------------------
-# Score per criteria
-ggplot(scores, aes(x = Target.Identifier, y = Criteria.Identifier)) +
-  spot.theme +
-  geom_point(aes(size = scaled_fdr, color = Target.ID))+
-  facet_grid(DataType ~ . ,scales = "free",space = "free")+
-  scale_color_manual(values = targetColors)
-ggsave("~/analysis-s05/figures/Results/scores_byFDR.png", scale = 1.2, width = 13, height = 8, bg = "white")
-
-
-# Rank
-ggplot(rankings, aes(x = Target.Identifier, y = summed_scaled_fdr, fill = Target.ID)) +
-  geom_bar(stat = "identity", color = "black") +
-  geom_text(data = function(x) subset(x, rank_scaled_fdr <= 10), aes(y = 11, label = rank_scaled_fdr), check_overlap = T) +
-  theme_minimal() +
-  theme(axis.text.x = element_text(angle = 90,hjust = 1, vjust = 0.5)) +
-  ggpubr::border() +
-  scale_fill_manual(values = targetColors) +
-  guides(fill = F) +
-  labs(x = NULL, y = "Summed Scores")
-ggsave("~/analysis-s05/figures/Results/ranking_byFDR.png", scale = 1, width = 12, height = 6, bg = "white")
-
-
-
-## 1. Based on effect * fdr but zeroing negatives
-## --------------------------------------------------
 # Score per criteria
 ggplot(scores, aes(x = Target.Identifier, y = Criteria.Identifier)) +
   spot.theme +
@@ -236,7 +181,7 @@ ggsave("~/analysis-s05/figures/Results/scores_rounded.png", scale = 1.2, width =
 # Rank
 ggplot(rankings, aes(x = Target.Identifier, y = summed_scaled_score_rounded, fill = Target.ID)) +
   geom_bar(stat = "identity", color = "black") +
-  geom_text(data = function(x) subset(x, rank_scaled_score_rounded <= 18), aes(y = 11, label = rank_scaled_score_rounded), check_overlap = T) +
+  geom_text(data = function(x) subset(x, rank_scaled_score_rounded <= 16), aes(y = 11, label = rank_scaled_score_rounded), check_overlap = T) +
   theme_minimal() +
   theme(axis.text.x = element_text(angle = 90,hjust = 1, vjust = 0.5)) +
   ggpubr::border() +
@@ -247,3 +192,88 @@ ggsave("~/analysis-s05/figures/Results/ranking_rounded.png", scale = 1, width = 
 
 
 
+
+#############################################
+# SCORING COMPLEMENTARITY TO DUPILUMAB
+#############################################
+# Almost zero negatives and multiply FDR and effect
+floor_dec <- function(x, k = 2) { # function to take the lowest number above 0 and round it down
+  minimal_value = x[which(x > 0)]
+  minimal_value = floor(min(minimal_value) * 10^k) / 10^k
+  x[which(x < 0)] <- minimal_value
+  return(x)
+}
+
+keep_signatures = openxlsx::read.xlsx("~/analysis-s05/data/Final signatures to be ranked or viewed in the dashboards.xlsx")
+signatureMapping = readRDS(get_workflow_outputs("wf-aa75ed069b"))
+
+treatment = readRDS(get_workflow_outputs("wf-e3e631e2c9"))
+  treatment$Target.Identifier = signatureMapping$New_identifier[match(treatment$Target.ID, signatureMapping$ID)]
+overlap = readRDS(get_workflow_outputs("wf-8222c73fb8"))
+coverage = readRDS(get_workflow_outputs("wf-c4a1547e7a"))
+whiteSpace_coverage = readRDS(get_workflow_outputs("wf-48c725a33f"))
+
+allCriteria = bind_rows(treatment, overlap, coverage, whiteSpace_coverage) %>%
+  dplyr::filter(Type == "bulk") %>%
+  dplyr::filter(Target.Identifier != "IL13") %>%
+  dplyr::filter(Target.Identifier %in% keep_signatures$Target[which(keep_signatures$Ranking == "Yes")])
+
+
+# First we set a threshold for FDR
+allCriteria$log10_fdr = ifelse(allCriteria$log10_fdr > 4, 4, allCriteria$log10_fdr)
+
+scores = allCriteria %>%
+  group_by(Criteria.Identifier) %>%
+  mutate(score = case_when(str_detect(Criteria.Identifier, "Coverage") ~ metricValue,
+                           str_detect(Criteria.Identifier, "Responders") ~ metricValue * fdr,
+                           str_detect(Criteria.Identifier, "Shared") ~ metricValue * log10_fdr,
+                           .default = log10_fdr * (1/metricValue))) %>%
+  mutate(score = case_when(str_detect(Criteria.Identifier, "Responders") & str_detect(Target.Identifier,"Random|random") ~ 0, # zeroing negative controls
+                           .default = score)) %>%
+  mutate(rounded_score = floor_dec(score)) %>% # zeroing all negative scores
+  mutate(scaled_score_rounded = scaling(rounded_score)) %>% # scaling
+  ungroup()
+
+pushToCC(scores, tagsToPass = list(list(name="object",value="scores_complementarity")))
+# wf-651a3f9622
+# wf-56345249fc
+
+scores$Target.ID = factor(scores$Target.ID, ordered = T, levels = names(targetColors))
+
+row_ord <- order(as.integer(scores$Target.ID))
+char_levels_in_factor_order <- unique(scores$Target.Identifier[row_ord])
+scores$Target.Identifier <- factor(scores$Target.Identifier,
+                                   levels = char_levels_in_factor_order,
+                                   ordered = TRUE)
+
+
+rankings = scores %>%
+  group_by(Target.Identifier, Target.ID) %>%
+  summarise(summed_scaled_score_rounded = sum(scaled_score_rounded), .groups = "drop") %>%
+  mutate(rank_scaled_score_rounded = rank(-summed_scaled_score_rounded))
+
+pushToCC(rankings, tagsToPass = list(list(name="object",value="rankings")))
+# wf-27897b1bcc
+# wf-c160239658
+# wf-9735cfa614
+
+# Score per criteria
+ggplot(scores, aes(x = Target.Identifier, y = Criteria.Identifier)) +
+  spot.theme +
+  geom_point(aes(size = scaled_score_rounded, color = Target.ID))+
+  facet_grid(DataType ~ . ,scales = "free",space = "free")+
+  scale_color_manual(values = targetColors)
+ggsave("~/analysis-s05/figures/Results/scores_rounded.png", scale = 1.2, width = 13, height = 8, bg = "white")
+
+
+# Rank
+ggplot(rankings, aes(x = Target.Identifier, y = summed_scaled_score_rounded, fill = Target.ID)) +
+  geom_bar(stat = "identity", color = "black") +
+  geom_text(data = function(x) subset(x, rank_scaled_score_rounded <= 15), aes(y = 7, label = rank_scaled_score_rounded), check_overlap = T) +
+  theme_minimal() +
+  theme(axis.text.x = element_text(angle = 90,hjust = 1, vjust = 0.5)) +
+  ggpubr::border() +
+  scale_fill_manual(values = targetColors) +
+  guides(fill = F) +
+  labs(x = NULL, y = "Summed Scores")
+ggsave("~/analysis-s05/figures/Results/ranking_rounded.png", scale = 1, width = 12, height = 6, bg = "white")

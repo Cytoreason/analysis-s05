@@ -7,7 +7,7 @@ wantedTerms = read.delim("~/analysis-s05/data/wantedTerms.tsv")
 
 # 1. Dupi pathway white space - gx_gsa
 # ==============================================
-# 1.1. Extract data
+# 1.0. Extract data
 # ------------------------
 wf = "wf-08a6a0a503" # disease model
 wf = "wf-3e419ff83b" # custom gene set
@@ -57,12 +57,66 @@ signatureMapping = readRDS(get_workflow_outputs("wf-aa75ed069b"))
 
 idx=which(Treatment_path$collection == "X2")
 Treatment_path$collection[idx] = signatureMapping$collection[match(Treatment_path$pathway[idx], signatureMapping$signature)]
+Treatment_path = Treatment_path[,-which(colnames(Treatment_path) %in% c("feature_score","feature_rank","estimate_percentile","nMoreExtreme","method"))]
+
+# Summarize random and shuffled random
+for(id in c("random","top50","bottom50")){
+  idx = which(str_detect(Treatment_path$pathway,id))
+  if(id != "random") { id = paste0("smoothedRandom_",id)}
+  
+  tmp = Treatment_path[idx,] %>%
+    group_by(submodel,model,term,collection,dataset) %>%
+    summarise(pvalue = mean(pvalue),
+              FDR = mean(FDR),
+              ES = mean(ES),
+              NES = mean(NES)) %>%
+    mutate(log10_fdr = -log10(FDR),
+           log10_pvalue = -log10(pvalue)) %>%
+    mutate(pathway = id, collection = "negativeControls", hit = NA, size = NA) %>%
+    select(colnames(Treatment_path))
+  
+  Treatment_path = Treatment_path[-idx,]
+  Treatment_path = rbind(Treatment_path, tmp)
+  rm(idx, tmp)
+}
 
 uploadToBQ(Treatment_path, bqdataset = "s05_atopic_dermatitis", tableName = "treatment_PrePostDupi")
 pushToCC(Treatment_path, tagsToPass = list(list(name="object",value="treatment_PrePostDupi")))
 # wf-88d79c9c27 - only disease model
 # wf-4a91d09f7c - with custom gene set
 # wf-7b89eb82e9 - including R/NR data
+# wf-39d8897f52 - collapsing negative controls
+
+
+# 1.1. Post vs Pre criteria
+# --------------------------------------
+treatment = readRDS(get_workflow_outputs("wf-7b89eb82e9"))
+treatment = treatment %>%
+  dplyr::filter(submodel == "bulk") %>%
+  dplyr::filter(term %in% c("W4_vs_W0:DupilumabL","W16_vs_W0:DupilumabL","W4_vs_W0:NR_L","W16_vs_W0:NR_L")) %>%
+  dplyr::filter(pathway %in% signatureMapping$signature) %>%
+  dplyr::select(submodel, term, collection, pathway, FDR, NES, hit, log10_fdr) %>%
+  rename(Type = submodel, Target.Collection = collection, Target.Identifier = pathway, metricValue = NES, Criteria.Identifier = term, fdr = FDR) %>%
+  mutate(Target.ID = signatureMapping$ID[match(Target.Identifier, signatureMapping$signature)]) %>%
+  mutate(Target.Identifier = signatureMapping$New_identifier[match(Target.Identifier, signatureMapping$signature)]) %>%
+  mutate(metricType = "bi-weight mid correlation", DataType = "Enrichment in Treatment")
+
+mapping = c("W4_vs_W0:DupilumabL" = "Complementarity to Dupilumab Treatment W4",
+            "W16_vs_W0:DupilumabL" = "Complementarity to Dupilumab Treatment W16",
+            "W4_vs_W0:NR_L" = "Complementarity to Dupilumab Non Responders W4",
+            "W16_vs_W0:NR_L" = "Complementarity to Dupilumab Non Responders W16")
+
+# here the target that are most affected by dupi will get the lower score
+# to do that we will A) flip direction (so it will not zero) and B) inverse after multiplying with FDR
+treatment$metricValue = (-1) * treatment$metricValue
+treatment$Criteria.Identifier = mapping[match(treatment$Criteria.Identifier, names(mapping))]
+treatment$Criteria.Collection[which(str_detect(treatment$Criteria.Identifier,"Non Responders"))] = "Enrichment in Dupilumab Non-Responders"
+treatment$Criteria.Collection[-which(str_detect(treatment$Criteria.Identifier,"Non Responders"))] = "Enrichment in Dupilumab"
+
+pushToCC(treatment)
+# wf-0fe8f4a3ab
+# wf-e3e631e2c9
+
 
 # 1.2. Define white space
 # ---------------------------
@@ -116,8 +170,7 @@ pushToCC(pathway_space, tagsToPass = list(list(name="object",value="pathways_ws_
 # wf-fb61fed813 - with th2
 uploadToBQ(pathway_space, bqdataset = "s05_atopic_dermatitis", tableName = "whiteSpace_pathways")
 
-
-
+ 
 # 2. Dupi cell white space - ct_test
 # --------------------------------------------------------------
 run_function_dist(FUN = function(ccm_wfid, wantedTerms){

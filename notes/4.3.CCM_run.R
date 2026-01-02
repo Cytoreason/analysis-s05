@@ -58,7 +58,7 @@ ccm_api_run_custom_gene_set_analysis(ccm , # when using AssetData it will pull r
 # generate_ccm -- Fri Dec 19 10:05:40 2025: wf-9cbfd36e26 [] - using ccm_fit instead of sample_annotation_table. Time extended.
 # generate_ccm -- Sat Dec 20 19:08:52 2025: wf-8d7f6929ca [] - adding cell meta pcs to pheno features
 # generate_ccm -- Sat Dec 20 19:11:05 2025: wf-3e419ff83b [] - with cells as pheno feature
-# generate_ccm -- Sun Dec 28 20:58:28 2025: wf-abde4bfab0 [] - treatment meta pcs
+# generate_ccm -- Sun Dec 28 20:58:28 2025: wf-abde4bfab0 [] - treatment meta pcs (final version)
 
 
 

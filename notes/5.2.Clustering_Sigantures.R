@@ -358,7 +358,7 @@ dev.off()
 # openxlsx::write.xlsx(pathwayClusters, "~/analysis-s05/figures/Results/Clustering/PCAs/pathwayClusters.xlsx")
 # openxlsx::write.xlsx(pathwayClusters, "~/analysis-s05/figures/Results/Clustering/allCellsPathways/pathwayClusters.xlsx")
 openxlsx::write.xlsx(pathwayClusters, "~/analysis-s05/figures/Results/Clustering/allCellsPathways/ReducedNumberOfTargets/pathwayClusters_6.xlsx")
-
+write.csv(mat, "~/exportedFiles/clustering_mat.csv", row.names = T)
 
 
 # split pathways two ways for easier reading of the pathways in each cluster
