@@ -141,16 +141,21 @@ whiteSpace_coverage = target_pathway %>%
   group_by(Target.Identifier, Type) %>%
   summarise(ws_coverage = mean(abs(correlation_target)>=0.4), .groups = "drop")
 
+# Fixing a bug in the code:
+#*There are both bulk and adjusted values per target (the "Type" column), in the original code the table wasn't filtered for bulk, instead the "Type" column was assigned all "bulk" values - so both bulk and adjusted values got Type=="bulk"
 whiteSpace_coverage = whiteSpace_coverage %>%
+  filter(Type=="bulk") %>% # added a filter
   mutate(Criteria.Identifier = "Coverage of Dupilumab White Space") %>%
   mutate(Criteria.Collection = "Dupilumab Complementarity") %>%
   mutate(Target.ID = signatureMapping$ID[match(Target.Identifier, signatureMapping$New_identifier)]) %>%
   mutate(Target.Collection = signatureMapping$collection[match(Target.Identifier, signatureMapping$New_identifier)]) %>%
   rename(metricValue = ws_coverage) %>%
   mutate(metricType = "coverage") %>%
-  mutate(fdr = NA, log10_fdr = NA, hit = NA, Type = "bulk") %>%
+  mutate(fdr = NA, log10_fdr = NA, hit = NA) %>% # removed: Type = "bulk"
+  #mutate(fdr = NA, log10_fdr = NA, hit = NA, Type = "bulk") %>%
   ungroup()
 
 uploadToBQ(whiteSpace_coverage, bqdataset = "s05_atopic_dermatitis", tableName = "whiteSpace_coverage")
 pushToCC(whiteSpace_coverage, tagsToPass = list(list(name="object",value="whitespace_coverage")))
 # wf-48c725a33f
+# wf-c2e26a6972

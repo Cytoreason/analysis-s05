@@ -191,8 +191,6 @@ ggplot(rankings, aes(x = Target.Identifier, y = summed_scaled_score_rounded, fil
 ggsave("~/analysis-s05/figures/Results/ranking_rounded.png", scale = 1, width = 12, height = 6, bg = "white")
 
 
-
-
 #############################################
 # SCORING COMPLEMENTARITY TO DUPILUMAB
 #############################################
@@ -208,10 +206,11 @@ keep_signatures = openxlsx::read.xlsx("~/analysis-s05/data/Final signatures to b
 signatureMapping = readRDS(get_workflow_outputs("wf-aa75ed069b"))
 
 treatment = readRDS(get_workflow_outputs("wf-e3e631e2c9"))
-  treatment$Target.Identifier = signatureMapping$New_identifier[match(treatment$Target.ID, signatureMapping$ID)]
+treatment$Target.Identifier = signatureMapping$New_identifier[match(treatment$Target.ID, signatureMapping$ID)]
 overlap = readRDS(get_workflow_outputs("wf-8222c73fb8"))
 coverage = readRDS(get_workflow_outputs("wf-c4a1547e7a"))
-whiteSpace_coverage = readRDS(get_workflow_outputs("wf-48c725a33f"))
+whiteSpace_coverage = readRDS(get_workflow_outputs("wf-c2e26a6972"))
+#whiteSpace_coverage = readRDS(get_workflow_outputs("wf-48c725a33f"))
 
 allCriteria = bind_rows(treatment, overlap, coverage, whiteSpace_coverage) %>%
   dplyr::filter(Type == "bulk") %>%
@@ -222,21 +221,60 @@ allCriteria = bind_rows(treatment, overlap, coverage, whiteSpace_coverage) %>%
 # First we set a threshold for FDR
 allCriteria$log10_fdr = ifelse(allCriteria$log10_fdr > 4, 4, allCriteria$log10_fdr)
 
-scores = allCriteria %>%
-  group_by(Criteria.Identifier) %>%
-  mutate(score = case_when(str_detect(Criteria.Identifier, "Coverage") ~ metricValue,
-                           str_detect(Criteria.Identifier, "Responders") ~ metricValue * fdr,
-                           str_detect(Criteria.Identifier, "Shared") ~ metricValue * log10_fdr,
-                           .default = log10_fdr * (1/metricValue))) %>%
-  mutate(score = case_when(str_detect(Criteria.Identifier, "Responders") & str_detect(Target.Identifier,"Random|random") ~ 0, # zeroing negative controls
-                           .default = score)) %>%
-  mutate(rounded_score = floor_dec(score)) %>% # zeroing all negative scores
-  mutate(scaled_score_rounded = scaling(rounded_score)) %>% # scaling
-  ungroup()
+# Old:
+# scores = allCriteria %>%
+#   group_by(Criteria.Identifier) %>%
+#   mutate(score = case_when(str_detect(Criteria.Identifier, "Coverage") ~ metricValue,
+#                            str_detect(Criteria.Identifier, "Responders") ~ metricValue * fdr,
+#                            str_detect(Criteria.Identifier, "Shared") ~ metricValue * log10_fdr,
+#                            .default = log10_fdr * (1/metricValue))) %>%
+#   mutate(score = case_when(str_detect(Criteria.Identifier, "Responders") & str_detect(Target.Identifier,"Random|random") ~ 0, # zeroing negative controls
+#                            .default = score)) %>%
+#   mutate(rounded_score = floor_dec(score)) %>% # zeroing all negative scores
+#   mutate(scaled_score_rounded = scaling(rounded_score)) %>% # scaling
+#   ungroup()
+
+# We decided to change the score for the treatment and non-responder criteria: 1/(metricValue*log10_fdr) and to zero if the enrichment in L_vs_HC is not significant (and/or not reversed in direction - e.g. down in disease and down in treatment...)
+# In the treatment object, the metricValue was already multiply by -1, but in the Disease Enrichment in L_vs_HC" it wasn't, so the same sign means reversed by treatment in this case...)
+enrichment_in_disease <- Results_filtered %>% # use the L_vs_HC results to zero non-flipping targets, or targets that are not significant in disease
+  dplyr::filter(Criteria.Identifier == "Disease Enrichment in L_vs_HC") %>%
+  dplyr::select(Target.Identifier,
+         disease_metricValue = metricValue,
+         disease_fdr = fdr) %>%
+  dplyr::distinct(Target.Identifier, .keep_all = TRUE)
+
+scores <- allCriteria %>%
+  dplyr::group_by(Criteria.Identifier) %>%
+  dplyr::mutate(score = dplyr::case_when(
+    stringr::str_detect(Criteria.Identifier, "Coverage") ~ metricValue,
+    stringr::str_detect(Criteria.Identifier, "Shared") ~ metricValue * log10_fdr,
+    TRUE ~ (1/(metricValue * log10_fdr))
+  )) %>%
+  dplyr::left_join(enrichment_in_disease, by = "Target.Identifier") %>%
+  dplyr::mutate(score = case_when(
+    stringr::str_detect(Criteria.Identifier, "Dupilumab") &
+      !is.na(disease_fdr) &
+      (
+        disease_fdr > 0.05 |
+          (
+            disease_fdr <= 0.05 &
+              !is.na(disease_metricValue) &
+              sign(metricValue) != 0 & sign(disease_metricValue) != 0 &
+              sign(metricValue) != sign(disease_metricValue)
+          )
+      ) ~ 0,
+    TRUE ~ score
+  )) %>%
+  dplyr::select(-disease_metricValue, -disease_fdr) %>%
+  dplyr::mutate(rounded_score = floor_dec(score)) %>%
+  dplyr::mutate(scaled_score_rounded = scaling(rounded_score)) %>%
+  dplyr::ungroup()
 
 pushToCC(scores, tagsToPass = list(list(name="object",value="scores_complementarity")))
 # wf-651a3f9622
 # wf-56345249fc
+# wf-0030d77e02
+# wf-070698da21
 
 scores$Target.ID = factor(scores$Target.ID, ordered = T, levels = names(targetColors))
 
@@ -256,6 +294,8 @@ pushToCC(rankings, tagsToPass = list(list(name="object",value="rankings")))
 # wf-27897b1bcc
 # wf-c160239658
 # wf-9735cfa614
+# wf-5c79873922
+# wf-52b9d9053a
 
 # Score per criteria
 ggplot(scores, aes(x = Target.Identifier, y = Criteria.Identifier)) +

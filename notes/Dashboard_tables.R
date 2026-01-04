@@ -72,8 +72,8 @@ uploadToBQ(scores_and_ranks, bqdataset = "s05_atopic_dermatitis", tableName = "d
 
 
 # For Dupilumab complementarity criteria
-scores = read_asset("wf-56345249fc")
-rankings = read_asset("wf-9735cfa614")
+scores = read_asset("wf-070698da21")
+rankings = read_asset("wf-52b9d9053a")
 
 scores_and_ranks = merge(scores, rankings)
 scores_and_ranks = scores_and_ranks[,c("Target.Identifier", "Target.Collection", "Criteria.Identifier", "scaled_score_rounded", "summed_scaled_score_rounded", "rank_scaled_score_rounded")]
