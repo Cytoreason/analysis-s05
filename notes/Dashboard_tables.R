@@ -34,9 +34,9 @@ CellMetadata = bind_rows(CellMetadata, dz)
 uploadToBQ(CellMetadata, bqdataset = "s05_atopic_dermatitis", tableName = "dashboards_CellMetadata")
 
 # for pathways, integrate new pathways from CCM
-PathwayMetadata = Metadata[[1]]
-  PathwayMetadata$ID = paste0(PathwayMetadata$collection, ":", PathwayMetadata$pathway)
-  PathwayMetadata$DZ.change = str_replace(PathwayMetadata$DZ.change, "NC","Unchanged")
+PathwayMetadata = Metadata[[3]]
+PathwayMetadata$ID = paste0(PathwayMetadata$collection, ":", PathwayMetadata$pathway)
+PathwayMetadata$DZ.change = str_replace(PathwayMetadata$DZ.change, "NC","Unchanged")
 
 dz = downloadFromBQ(bqdataset = "s05_atopic_dermatitis", tableName = "AD_gx_gsa")
 dz = dz[which(dz$collection %in% c("btm","neuroinflammation", "th2","Ligands","Positives","epidermis","reactome","kegg","h")),]
@@ -154,17 +154,84 @@ target_pathway$changeInDisease = dz$DZ.change[match(target_pathway$pathway, dz$I
 
 uploadToBQ(target_pathway, bqdataset = "s05_atopic_dermatitis", tableName = "dashboards_target_pathway")
 
+### Combine dashboards_PathwayMetadata into dashboards_target_pathway (instead of the Tableau) - issues with pathway names:
+PathwayMetadata <- downloadFromBQ(bqdataset = "s05_atopic_dermatitis", tableName = "dashboards_PathwayMetadata", pageSize = 20000)
+target_pathway <- downloadFromBQ(bqdataset = "s05_atopic_dermatitis", tableName = "dashboards_target_pathway", pageSize = 20000)
+
+#*** Gil: there are multiple values per pathways in the PathwayMetadata table - probably multiple terms - need to regenerate. The Pathway_level column is not necessary...
+# I will use the "dz" dataframe (which was used for disease coverage) and not the PathwayMetadata.
+intersect(colnames(PathwayMetadata),colnames(dz))
+setdiff(colnames(PathwayMetadata),colnames(dz))
+dz <- dz %>%
+  dplyr::mutate(adjusted=submodel=="adjusted",Disease="AD") %>%
+  dplyr::rename(neglog10FDR=log10_fdr)
+
+dz <- dz[,intersect(colnames(PathwayMetadata),colnames(dz))]  
+
+target_pathway$ID <- target_pathway$pathway
+
+head(target_pathway)
+length(setdiff(target_pathway$ID,dz$ID))
+length(setdiff(dz$ID,target_pathway$ID))
+
+dz$name_lowercase <- trimws(tolower(dz$ID))
+target_pathway$name_lowercase <- trimws(tolower(target_pathway$ID))
+
+intersect(unique(target_pathway$name_lowercase),unique(dz$name_lowercase)) # 2574
+setdiff(unique(target_pathway$name_lowercase),unique(dz$name_lowercase)) # 880
+setdiff(unique(dz$name_lowercase),unique(target_pathway$name_lowercase)) # 65
+
+grep("\\(",setdiff(unique(target_pathway$name_lowercase),unique(dz$name_lowercase)),ignore.case = T,value = T)
+grep("\\(",setdiff(unique(dz$name_lowercase),unique(target_pathway$name_lowercase)),ignore.case = T,value = T)
+
+dz$name_lowercase <- gsub("\\ \\(bont/a\\)|\\ \\(bont/b\\)|\\ \\(bont/c\\)|\\ \\(bont/d\\)|\\ \\(bont/e\\)|\\ \\(bont/f\\)|\\ \\(bont/g\\)","",dz$name_lowercase)
+dz$name_lowercase <- gsub("reactome:trif\\(","reactome:trif\\ \\(",dz$name_lowercase)
+dz$name_lowercase <- gsub("reactome:activation of irf3/irf7 mediated by tbk1/ikk epsilon","reactome:activation of irf3, irf7 mediated by tbk1, ikkε (ikbke)",dz$name_lowercase)
+dz$name_lowercase <- gsub("reactome:initiation of nuclear envelope reformation","reactome:initiation of nuclear envelope (ne) reformation",dz$name_lowercase)
+dz$name_lowercase <- gsub("reactome:hsp90 chaperone cycle for steroid hormone receptors \\(shr\\)","reactome:hsp90 chaperone cycle for steroid hormone receptors \\(shr\\) in the presence of ligand",dz$name_lowercase)
+dz$name_lowercase <- gsub("reactome:nuclear envelope reassembly","reactome:nuclear envelope (ne) reassembly",dz$name_lowercase)
+
+target_pathway$name_lowercase <- gsub("\\ \\(bota\\)|\\ \\(botb\\)|\\ \\(botc\\)|\\ \\(botd\\)|\\ \\(bote\\)|\\ \\(botf\\)|\\ \\(botg\\)","",target_pathway$name_lowercase)
+target_pathway$name_lowercase <- gsub("reactome:defective galnt12 causes crcs1","reactome:defective galnt12 causes colorectal cancer 1 (crcs1)",target_pathway$name_lowercase)
+target_pathway$name_lowercase <- gsub("reactome:defective c1galt1c1 causes tnps","reactome:defective c1galt1c1 causes tn polyagglutination syndrome (tnps)",target_pathway$name_lowercase)
+target_pathway$name_lowercase <- gsub("reactome:defective galnt3 causes hftc","reactome:defective galnt3 causes familial hyperphosphatemic tumoral calcinosis (hftc)",target_pathway$name_lowercase)
+target_pathway$name_lowercase <- gsub("reactome:defective b3galtl causes pps","reactome:defective b3galtl causes peters-plus syndrome (pps)",target_pathway$name_lowercase)
+target_pathway$name_lowercase <- gsub("reactome:regulation of lipid metabolism by pparalpha","reactome:regulation of lipid metabolism by peroxisome proliferator-activated receptor alpha (pparalpha)",target_pathway$name_lowercase)
+target_pathway$name_lowercase <- gsub("reactome:defective cyp11a1 causes aicsr","reactome:defective cyp11a1 causes adrenal insufficiency, congenital, with 46,xy sex reversal (aicsr)",target_pathway$name_lowercase)
+target_pathway$name_lowercase <- gsub("reactome:defective dpm1 causes dpm1-cdg","reactome:defective dpm1 causes dpm1-cdg (cdg-1e)",target_pathway$name_lowercase)
+target_pathway$name_lowercase <- gsub("reactome:defective dpm2 causes dpm2-cdg","reactome:defective dpm2 causes dpm2-cdg (cdg-1u)",target_pathway$name_lowercase)
+target_pathway$name_lowercase <- gsub("reactome:defective dpm3 causes dpm3-cdg","reactome:defective dpm3 causes dpm3-cdg (cdg-1o)",target_pathway$name_lowercase)
+target_pathway$name_lowercase <- gsub("reactome:defective csf2ra causes smdp4","reactome:defective csf2ra causes pulmonary surfactant metabolism dysfunction 4 (smdp4)",target_pathway$name_lowercase)
+target_pathway$name_lowercase <- gsub("reactome:defective csf2rb causes smdp5","reactome:defective csf2rb causes pulmonary surfactant metabolism dysfunction 5 (smdp5)",target_pathway$name_lowercase)
+
+intersect(unique(target_pathway$name_lowercase),unique(dz$name_lowercase)) # 2597
+setdiff(unique(target_pathway$name_lowercase),unique(dz$name_lowercase)) # 857
+setdiff(unique(dz$name_lowercase),unique(target_pathway$name_lowercase)) # 42
+
+# Combine the two tables:
+target_pathway$changeInDisease <- NULL
+target_pathway_with_dz <- unique(target_pathway %>% left_join(dz[,c("name_lowercase","DZ.change","Disease","adjusted")],by="name_lowercase"))
+target_pathway_with_dz$name_lowercase <- NULL
+colnames(target_pathway_with_dz)[colnames(target_pathway_with_dz)=="DZ.change"] <- "DZ_change"
+colnames(target_pathway_with_dz)[colnames(target_pathway_with_dz)=="submodel"] <- "submodel_correlation"
+colnames(target_pathway_with_dz)[colnames(target_pathway_with_dz)=="adjusted"] <- "DZ_is_adjusted"
+
+# There are correlations for both bulk and adjusted (the "submodel_correlation" column), and there are direction in DZ in both bulk and adjusted. We want to simplify and match the direction in DZ with the submodel_correlation:
+filtered_target_pathway_with_dz <- target_pathway_with_dz %>%
+  filter((submodel_correlation=="adjusted"&DZ_is_adjusted) | (submodel_correlation=="bulk"&!DZ_is_adjusted))
+
+uploadToBQ(filtered_target_pathway_with_dz, bqdataset = "s05_atopic_dermatitis", tableName = "dashboards_target_pathway_Gil")
 
 ## Pathway volcano
 ## ==========================
 dz = downloadFromBQ(bqdataset = "s05_atopic_dermatitis", tableName = "AD_gx_gsa")
 dz = dz %>%
-  dplyr::filter(!collection %in% c("c2.cgp","c2.cp","c2.cp.biocarta","c2.cp.kegg", "c2.cp.reactome","c3.tft","c7","epidermis","Neuronal","Mast","Itch")) %>%
+  dplyr::filter(!collection %in% c("c2.cgp","c2.cp","c2.cp.biocarta","c2.cp.kegg", "c2.cp.reactome","c3.tft","c7","Neuronal","Mast","Itch")) %>% # removed "epidermis" from here (we need to include it)
   mutate(collection = ifelse(pathway %in% c("Terminal_Differentiation_and_Lipids", "lichenification"), "epidermis",collection))
 
 treatments = downloadFromBQ(bqdataset = "s05_atopic_dermatitis", tableName = "treatment_PrePostDupi")
 treatments = treatments %>%
-  dplyr::filter(!collection %in% c("c2.cgp","c2.cp","c2.cp.biocarta","c2.cp.kegg", "c2.cp.reactome","c3.tft","c7","epidermis","Neuronal","Mast","Itch")) %>%
+  dplyr::filter(!collection %in% c("c2.cgp","c2.cp","c2.cp.biocarta","c2.cp.kegg", "c2.cp.reactome","c3.tft","c7","Neuronal","Mast","Itch")) %>% # removed "epidermis" from here (we need to include it)
   mutate(collection = ifelse(pathway %in% c("Terminal_Differentiation_and_Lipids", "lichenification"), "epidermis",collection)) %>%
   dplyr::filter(term %in% c("W4_vs_W0:NR_L", "W4_vs_W0:R_L", "W16_vs_W0:NR_L", "W16_vs_W0:R_L", "W4_vs_W0:DupilumabL", "W16_vs_W0:DupilumabL"))
 
@@ -186,3 +253,23 @@ idx = which(joined$pathway %in% signatureMapping$signature)
 joined$pathway[idx] = signatureMapping$New_identifier[match(joined$pathway[idx], signatureMapping$signature)]
   
 uploadToBQ(joined, bqdataset = "s05_atopic_dermatitis", tableName = "dashboards_volcano_DiseaseAndDupilumab")
+
+# Check if the pathways in volcano_DiseaseAndDupilumab match the pathways in dashboards_target_pathway_Gil
+volcano_DiseaseAndDupilumab <- downloadFromBQ(bqdataset = "s05_atopic_dermatitis", tableName = "dashboards_volcano_DiseaseAndDupilumab")
+volcano_DiseaseAndDupilumab$ID <- paste0(volcano_DiseaseAndDupilumab$collection,":",volcano_DiseaseAndDupilumab$pathway)
+
+intersect(tolower(unique(target_pathway_with_dz$ID)),tolower(unique(volcano_DiseaseAndDupilumab$ID))) # 2561 shared pathways
+setdiff(tolower(unique(target_pathway_with_dz$ID)),tolower(unique(volcano_DiseaseAndDupilumab$ID))) # 893 target_pathway unique pathways
+setdiff(tolower(unique(volcano_DiseaseAndDupilumab$ID)),tolower(unique(target_pathway_with_dz$ID))) # 99 svolcano_DiseaseAndDupilumab unique pathways
+
+unique(volcano_DiseaseAndDupilumab$ID[volcano_DiseaseAndDupilumab$collection=="X2"])
+unique(target_pathway_with_dz$ID[target_pathway_with_dz$collection=="X2"])
+
+
+## Upload pathway ontology with the custom signatures
+## ==========================
+ontology_corrected <- read.csv("~/capsule/scratch/ontology_corrected.csv")
+pushToCC(ontology_corrected, tagsToPass = list(list(name="object",value="ontology_corrected")))
+# wf-010d0c2186
+
+uploadToBQ(ontology_corrected, bqdataset = "s05_atopic_dermatitis", tableName = "ontology_corrected")

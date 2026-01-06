@@ -34,7 +34,7 @@ gxgsa_cgs = gxgsa_cgs %>%
   dplyr::filter(submodel %in% c("bulk","adjusted__1__1")) %>%
   mutate(submodel = case_when(submodel == "bulk" ~ "bulk",
                               submodel == "adjusted__1__1" ~ "adjusted")) %>%
-  rename(FDR = fdr, ES = es, NES = nes, nMoreExtreme = nmoreextreme) %>%
+  dplyr::rename(FDR = fdr, ES = es, NES = nes, nMoreExtreme = nmoreextreme) %>%
   dplyr::select(-feature_id,-hit_id)
 
 
