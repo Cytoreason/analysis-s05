@@ -271,5 +271,6 @@ unique(target_pathway_with_dz$ID[target_pathway_with_dz$collection=="X2"])
 ontology_corrected <- read.csv("~/capsule/scratch/ontology_corrected.csv")
 pushToCC(ontology_corrected, tagsToPass = list(list(name="object",value="ontology_corrected")))
 # wf-010d0c2186
+# wf-85b089d95b
 
 uploadToBQ(ontology_corrected, bqdataset = "s05_atopic_dermatitis", tableName = "ontology_corrected")
