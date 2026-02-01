@@ -19,6 +19,7 @@ ct_test = rbind(statistic_table(ccm_v13$meta$AD$ct_test),
 ct_test$feature_id = skin$V1[match(ct_test$feature_id, skin$V2)]
 ct_test$skin_signature = "v13"
 uploadToBQ(ct_test, bqdataset = "s05_atopic_dermatitis", tableName = "skinV13_ct_test")
+# wf-63bb56b0aa
 
 ct_test_previous = rbind(statistic_table(ccm_original$meta$AD$ct_test),
                          statistic_table(ccm_original$meta$L_vs_HC$ct_test),
