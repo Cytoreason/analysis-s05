@@ -101,6 +101,9 @@ network$Target.Identifier = signatureMapping$New_identifier[match(network$Target
 pushToCC(network, tagsToPass = list(list(name="object",value="network_criteria")))
 # wf-ec34d7ef49
 
+## Export
+Network = readRDS(get_workflow_outputs("wf-ec34d7ef49"))
+write.csv(Network, "~/exportedFiles/network.csv", row.names = F, quote = F)
 
 ## All criteria
 ## ====================
@@ -204,35 +207,21 @@ floor_dec <- function(x, k = 2) { # function to take the lowest number above 0 a
 
 keep_signatures = openxlsx::read.xlsx("~/analysis-s05/data/Final signatures to be ranked or viewed in the dashboards.xlsx")
 signatureMapping = readRDS(get_workflow_outputs("wf-aa75ed069b"))
+Results_filtered = readRDS(get_workflow_outputs("wf-45bed4e3de"))
 
 treatment = readRDS(get_workflow_outputs("wf-e3e631e2c9"))
 treatment$Target.Identifier = signatureMapping$New_identifier[match(treatment$Target.ID, signatureMapping$ID)]
-overlap = readRDS(get_workflow_outputs("wf-8222c73fb8"))
-coverage = readRDS(get_workflow_outputs("wf-c4a1547e7a"))
-whiteSpace_coverage = readRDS(get_workflow_outputs("wf-c2e26a6972"))
-#whiteSpace_coverage = readRDS(get_workflow_outputs("wf-48c725a33f"))
+overlap = readRDS(get_workflow_outputs("wf-3c7ac8ddd1"))
+coverage = readRDS(get_workflow_outputs("wf-4c7ecb1fc6"))
+whiteSpace_coverage = readRDS(get_workflow_outputs("wf-97923f7e39"))
 
 allCriteria = bind_rows(treatment, overlap, coverage, whiteSpace_coverage) %>%
   dplyr::filter(Type == "bulk") %>%
-  dplyr::filter(Target.Identifier != "IL13") %>%
   dplyr::filter(Target.Identifier %in% keep_signatures$Target[which(keep_signatures$Ranking == "Yes")])
 
 
 # First we set a threshold for FDR
 allCriteria$log10_fdr = ifelse(allCriteria$log10_fdr > 4, 4, allCriteria$log10_fdr)
-
-# Old:
-# scores = allCriteria %>%
-#   group_by(Criteria.Identifier) %>%
-#   mutate(score = case_when(str_detect(Criteria.Identifier, "Coverage") ~ metricValue,
-#                            str_detect(Criteria.Identifier, "Responders") ~ metricValue * fdr,
-#                            str_detect(Criteria.Identifier, "Shared") ~ metricValue * log10_fdr,
-#                            .default = log10_fdr * (1/metricValue))) %>%
-#   mutate(score = case_when(str_detect(Criteria.Identifier, "Responders") & str_detect(Target.Identifier,"Random|random") ~ 0, # zeroing negative controls
-#                            .default = score)) %>%
-#   mutate(rounded_score = floor_dec(score)) %>% # zeroing all negative scores
-#   mutate(scaled_score_rounded = scaling(rounded_score)) %>% # scaling
-#   ungroup()
 
 # We decided to change the score for the treatment and non-responder criteria: 1/(metricValue*log10_fdr) and to zero if the enrichment in L_vs_HC is not significant (and/or not reversed in direction - e.g. down in disease and down in treatment...)
 # In the treatment object, the metricValue was already multiply by -1, but in the Disease Enrichment in L_vs_HC" it wasn't, so the same sign means reversed by treatment in this case...)
@@ -275,6 +264,7 @@ pushToCC(scores, tagsToPass = list(list(name="object",value="scores_complementar
 # wf-56345249fc
 # wf-0030d77e02
 # wf-070698da21
+# wf-34b85ee0cc - with IL13
 
 scores$Target.ID = factor(scores$Target.ID, ordered = T, levels = names(targetColors))
 
@@ -288,7 +278,7 @@ scores$Target.Identifier <- factor(scores$Target.Identifier,
 rankings = scores %>%
   group_by(Target.Identifier, Target.ID) %>%
   summarise(summed_scaled_score_rounded = sum(scaled_score_rounded), .groups = "drop") %>%
-  mutate(rank_scaled_score_rounded = rank(-summed_scaled_score_rounded))
+  mutate(rank_scaled_score_rounded = rank(-summed_scaled_score_rounded, ties.method = "random"))
 
 pushToCC(rankings, tagsToPass = list(list(name="object",value="rankings")))
 # wf-27897b1bcc
@@ -296,6 +286,8 @@ pushToCC(rankings, tagsToPass = list(list(name="object",value="rankings")))
 # wf-9735cfa614
 # wf-5c79873922
 # wf-52b9d9053a
+# wf-24ecca8512 - with IL13
+
 
 # Score per criteria
 ggplot(scores, aes(x = Target.Identifier, y = Criteria.Identifier)) +

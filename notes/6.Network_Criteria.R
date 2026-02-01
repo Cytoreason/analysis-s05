@@ -293,7 +293,6 @@ pushToCC(topology, tagsToPass = list(list(name="object", value="topology")))
 uploadToBQ(topology, bqdataset = "s05_atopic_dermatitis", tableName = "Results_Network", disposition = "WRITE_APPEND")
 
 
-
 ## Visualization
 ## ==========================
 # centrality

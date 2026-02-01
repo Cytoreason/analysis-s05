@@ -161,9 +161,11 @@ ggsave("~/analysis-s05/figures/skin_v16/geneset_cell_correlation.png", width = 5
 
 ## Extract ct_test post Dupilumab
 ## ======================================
-ct_test_post_dupi = statistic_table(analysisResultElement(ccm$datasets$GSE130588__GPL570$model$Treatment__GSE130588__GPL570__Dupilumab,"ct_test"),
-                                    term = c("W16_vs_W0:DupilumabL","W16_vs_W0:DupilumabNL","W16_vs_W0:PlaceboL",
-                                             "W4_vs_W0:DupilumabL","W4_vs_W0:PlaceboL"))
+ct_test_post_dupi = rbind(statistic_table(analysisResultElement(ccm$datasets$GSE130588__GPL570$model$Treatment__GSE130588__GPL570__Dupilumab,"ct_test"),
+                                    term = c("W16_vs_W0:DupilumabL","W16_vs_W0:DupilumabNL","W16_vs_W0:PlaceboL", "W4_vs_W0:DupilumabL")),
+                          statistic_table(analysisResultElement(ccm$datasets$GSE130588__GPL570$model$Dupilumab_response__GSE130588__GPL570__R_vs_NR,"ct_test"),
+                                          term = c("W4_vs_W0:NR_L", "W4_vs_W0:R_L", "W16_vs_W0:NR_L", "W4_vs_W0:R_L")))
+
 ct_test_post_dupi$feature_id = skin$V1[match(ct_test_post_dupi$feature_id, skin$V2)]
 ct_test_post_dupi = ct_test_post_dupi[,c("experiment_id", "term", "feature_id", "signature_collection", "estimate", "fdr")]
 ct_test_post_dupi$log10_fdr = -log10(ct_test_post_dupi$fdr)

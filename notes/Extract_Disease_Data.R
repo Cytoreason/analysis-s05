@@ -4,6 +4,10 @@ library(tidyverse)
 
 ccm_dm = as_ccm_fit("wf-08a6a0a503") # the original disease model
 ccm_cgs = as_ccm_fit("wf-3e419ff83b") # adding keratinocyte adjustment
+ccm_skin16 = as_ccm_fit("wf-882a48484e") # skin v16
+skin = read.csv("~/data/skin_modified.csv", row.names = NULL, sep = "\t", header = F)
+skin = rbind(skin, c("basophil","CRCL_0000357"))
+
 geneMapping = toTable(org.Hs.eg.db::org.Hs.egSYMBOL)
 # uploadToBQ(geneMapping, bqdataset = "s05_atopic_dermatitis", tableName = "geneMapping")
 
@@ -102,48 +106,47 @@ uploadToBQ(ct_test, bqdataset = "s05_atopic_dermatitis", tableName = "AD_ct_test
 # geneset/cell
 # ----------------
 subsetting = ~(collection %in% c("h","kegg","reactome","btm") &
-                 submodel %in% c("bulk","adjusted__1__meta1_pc1","adjusted__1__CRCL_0000348","adjusted__1__meta1_pc1_CRCL_0000348"))
+                 submodel %in% c("bulk","adjusted__1__1_1"))
 
-geneset_cell = rbind(build_service_result_tables(ccm$meta$L_vs_NL$feature_cell_correlations, subset = subsetting)$gene_set_activity_cell_correlations %>%
+geneset_cell = rbind(build_service_result_tables(ccm_skin16$meta$L_vs_NL$feature_cell_correlations, subset = subsetting)$gene_set_activity_cell_correlations %>%
                        mutate(term = "L_vs_NL"),
-                     build_service_result_tables(ccm$meta$AD$feature_cell_correlations, subset = subsetting)$gene_set_activity_cell_correlations %>%
+                     build_service_result_tables(ccm_skin16$meta$AD$feature_cell_correlations, subset = subsetting)$gene_set_activity_cell_correlations %>%
                        mutate(term = "DZ_vs_HC"),
-                     build_service_result_tables(ccm$meta$L_vs_HC$feature_cell_correlations, subset = subsetting)$gene_set_activity_cell_correlations %>%
+                     build_service_result_tables(ccm_skin16$meta$L_vs_HC$feature_cell_correlations, subset = subsetting)$gene_set_activity_cell_correlations %>%
                        mutate(term = "L_vs_HC"),
-                     build_service_result_tables(ccm$meta$NL_vs_HC$feature_cell_correlations, subset = subsetting)$gene_set_activity_cell_correlations %>%
+                     build_service_result_tables(ccm_skin16$meta$NL_vs_HC$feature_cell_correlations, subset = subsetting)$gene_set_activity_cell_correlations %>%
                        mutate(term = "NL_vs_HC"))
 
 geneset_cell = geneset_cell %>%
-  dplyr::filter(sample_subset != "L_vs_NL") %>% # unclear why this is included
-  mutate(feature_id_2 = cells$V1[match(feature_id_2, cells$V2)]) %>%
-  mutate(submodel = case_when(submodel == "bulk" ~ "bulk",
-                              submodel == "adjusted__1__meta1_pc1" ~ "adjusted_metaPC1",
-                              submodel == "adjusted__1__CRCL_0000348" ~ "adjusted_keratinocyte",
-                              submodel == "adjusted__1__meta1_pc1_CRCL_0000348" ~ "adjusted_metaPC1_keratinocytes"))
+  dplyr::filter(!sample_subset %in% c("L_vs_NL","__all__")) %>% # unclear why this is included
+  mutate(feature_id_2 = skin$V1[match(feature_id_2, skin$V2)])
 
 uploadToBQ(geneset_cell, bqdataset = "s05_atopic_dermatitis", tableName = "AD_geneset_cell_correlations")
 
 
 # gene/cell
 # ----------------
-subsetting = ~(submodel %in% c("bulk","adjusted__1__meta1_pc1","adjusted__1__CRCL_0000348","adjusted__1__meta1_pc1_CRCL_0000348"))
+subsetting = ~(submodel %in% c("bulk","adjusted__1__1_1"))
 
-gene_cell = rbind(build_service_result_tables(ccm$meta$L_vs_NL$gene_cell_correlations, subset = subsetting)$gene_cell_correlations,
-                 build_service_result_tables(ccm$meta$AD$gene_cell_correlations, subset = subsetting)$gene_cell_correlations,
-                 build_service_result_tables(ccm$meta$L_vs_HC$gene_cell_correlations, subset = subsetting)$gene_cell_correlations,
-                 build_service_result_tables(ccm$meta$NL_vs_HC$gene_cell_correlations, subset = subsetting)$gene_cell_correlations)
+gene_cell = bind_rows(build_service_result_tables(ccm_skin16$meta$L_vs_NL$gene_cell_correlations, subset = subsetting)$gene_cell_correlations %>%
+                    mutate(comparison = "L_vs_NL"),
+                 build_service_result_tables(ccm_skin16$meta$AD$gene_cell_correlations, subset = subsetting)$gene_cell_correlations %>%
+                   mutate(comparison = "DZ_vs_HC"),
+                 build_service_result_tables(ccm_skin16$meta$L_vs_HC$gene_cell_correlations, subset = subsetting)$gene_cell_correlations %>%
+                   mutate(comparison = "L_vs_HC"),
+                 build_service_result_tables(ccm_skin16$meta$NL_vs_HC$gene_cell_correlations, subset = subsetting)$gene_cell_correlations %>%
+                    mutate(comparison = "NL_vs_HC"))
 
 gene_cell = gene_cell %>%
-  dplyr::filter(sample_subset != "L_vs_NL") %>% # unclear why this is included
-  mutate(feature_id_2 = cells$V1[match(feature_id_2, cells$V2)]) %>%
-  mutate(symbol = geneMapping$symbol[match(feature_id_2, geneMapping$gene_id)]) %>%
-  mutate(submodel = case_when(submodel == "bulk" ~ "bulk",
-                              submodel == "adjusted__1__meta1_pc1" ~ "adjusted_metaPC1",
-                              submodel == "adjusted__1__CRCL_0000348" ~ "adjusted_keratinocyte",
-                              submodel == "adjusted__1__meta1_pc1_CRCL_0000348" ~ "adjusted_metaPC1_keratinocytes"))
+  dplyr::filter(!term %in% c("L_vs_NL","__all__")) %>% # unclear why this is included
+  mutate(feature_id_2 = skin$V1[match(feature_id_2, skin$V2)]) %>%
+  mutate(symbol = geneMapping$symbol[match(feature_id_1, geneMapping$gene_id)])
 
 uploadToBQ(gene_cell, bqdataset = "s05_atopic_dermatitis", tableName = "AD_gene_cell_correlations")
-
+gene_cell_filtered = gene_cell %>%
+  dplyr::select(comparison, term, submodel, feature_id_1, symbol, feature_id_2, value, pvalue, fdr) %>%
+  rename(entrez = feature_id_1, cell = feature_id_2, correlation = value)
+write.csv(gene_cell_filtered, "~/exportedFiles/gene_cell_correlations.csv", quote = F, row.names = F)
 
 # 5. Sample classifications
 # --------------------------------------

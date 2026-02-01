@@ -6,6 +6,7 @@ library(tidyverse)
 library(scales, include.only = "rescale")
 
 keep_signatures = openxlsx::read.xlsx("~/analysis-s05/data/Final signatures to be ranked or viewed in the dashboards.xlsx")
+signatureMapping = readRDS(get_workflow_outputs("wf-aa75ed069b"))
 
 scaling = function(scale_vector, min_val = 0.1, max_val = 1) {
   rescale(x = scale_vector, to = c(min_val, max_val))
@@ -38,13 +39,13 @@ steady_arm = Results[which(Results$Target.Identifier == "IL13"),] %>%
   pivot_wider(id_cols = c(Type, Criteria.Identifier), names_from = Target.Identifier, 
               names_glue = "correlation_{Target.Identifier}", values_from = correlation)
   
-targets = Results[-which(Results$Target.Identifier == "IL13"),] %>%
+targets = Results %>%
   dplyr::select(Type, Target.Identifier, Criteria.Identifier, metricValue) %>%
   rename(correlation_target = metricValue)
 
 joined = merge(targets, steady_arm, by = c("Type", "Criteria.Identifier"), all = T)
 # wf-20430b1067
-
+# wf-658b8973a5 with IL13
 
 # Overlap is the correlation between IL13 and the targets
 # -----------------------------------------------------------------
@@ -66,6 +67,8 @@ uploadToBQ(overlap_statistic, bqdataset = "s05_atopic_dermatitis", tableName = "
 pushToCC(overlap_statistic, tagsToPass = list(list(name='object',value='overlap')))
 # wf-9f2cf87096
 # wf-8222c73fb8
+# wf-3c7ac8ddd1 - with IL13
+
 
 # Coverage is A+B+C/A+B+C+D with a 0.4 cutoff
 # ------------------------------------------------
@@ -75,35 +78,6 @@ coverage_statistic = joined %>%
   mutate(group_IL13 = case_when(correlation_target < cutoff & correlation_IL13 < cutoff ~ "ns", .default = "covering")) %>%
   group_by(Type, Target.Identifier) %>%
   summarise(coverage = length(which(group_IL13 == "covering"))/n(), .groups = "drop")
-
-
-# # permutations for FDR - will permute on the target within each pathway
-# nPermutations = 1000
-# set.seed(1234)
-# 
-# perms = lapply(1:nPermutations, function(i) {
-#   joined %>%
-#     mutate(covering = !(correlation_target < cutoff & correlation_IL13 < cutoff)) %>%
-#     group_by(Type) %>%
-#     mutate(Target.Identifier = sample(Target.Identifier)) %>%
-#     ungroup() %>%
-#     group_by(Type, Target.Identifier) %>%
-#     summarise(coverage_perm = mean(covering), .groups = "drop")
-# }) %>% bind_rows()
-# 
-# apply(coverage_statistic, 1, function(r){
-#   tmp = perms$coverage_perm[which(perms$Type == r[1] & perms$Target.Identifier == r[2])]
-#   length(which(tmp >= as.numeric(r[3])))
-# })
-# coverage_statistic = coverage_statistic %>%
-#   left_join(perms, by = c("Type", "Target.Identifier")) %>%
-#   group_by(Type, Target.Identifier) %>%
-#   summarise(
-#     coverage = first(coverage),
-#     pvalue   = (sum(coverage_perm >= first(coverage)) + 1) / (n() + 1),
-#     .groups  = "drop"
-#   )
-
 
 coverage_statistic = coverage_statistic %>%
   mutate(Criteria.Identifier = "Coverage of Disease Features", Criteria.Collection = "Disease Coverage") %>%
@@ -118,10 +92,11 @@ uploadToBQ(coverage_statistic, bqdataset = "s05_atopic_dermatitis", tableName = 
 pushToCC(coverage_statistic, tagsToPass = list(list(name='object',value='coverage')))
 # wf-98cd7a5d9d
 # wf-c4a1547e7a
+# wf-4c7ecb1fc6 - with IL13
 
 # Coverage of white space
 # ------------------------------------------------
-joined = readRDS(get_workflow_outputs("wf-20430b1067"))
+joined = readRDS(get_workflow_outputs("wf-20430b1067")) # wf-658b8973a5 with IL13
 pathway_space = readRDS(get_workflow_outputs("wf-fb61fed813"))
 
 white_space = pathway_space %>%
@@ -151,11 +126,11 @@ whiteSpace_coverage = whiteSpace_coverage %>%
   mutate(Target.Collection = signatureMapping$collection[match(Target.Identifier, signatureMapping$New_identifier)]) %>%
   rename(metricValue = ws_coverage) %>%
   mutate(metricType = "coverage") %>%
-  mutate(fdr = NA, log10_fdr = NA, hit = NA) %>% # removed: Type = "bulk"
-  #mutate(fdr = NA, log10_fdr = NA, hit = NA, Type = "bulk") %>%
+  mutate(fdr = NA, log10_fdr = NA, hit = NA) %>% 
   ungroup()
 
 uploadToBQ(whiteSpace_coverage, bqdataset = "s05_atopic_dermatitis", tableName = "whiteSpace_coverage")
 pushToCC(whiteSpace_coverage, tagsToPass = list(list(name="object",value="whitespace_coverage")))
 # wf-48c725a33f
 # wf-c2e26a6972
+# wf-97923f7e39 - with IL13

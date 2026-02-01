@@ -72,8 +72,8 @@ uploadToBQ(scores_and_ranks, bqdataset = "s05_atopic_dermatitis", tableName = "d
 
 
 # For Dupilumab complementarity criteria
-scores = read_asset("wf-070698da21")
-rankings = read_asset("wf-52b9d9053a")
+scores = read_asset("wf-34b85ee0cc")
+rankings = read_asset("wf-24ecca8512")
 
 scores_and_ranks = merge(scores, rankings)
 scores_and_ranks = scores_and_ranks[,c("Target.Identifier", "Target.Collection", "Criteria.Identifier", "scaled_score_rounded", "summed_scaled_score_rounded", "rank_scaled_score_rounded")]
@@ -141,10 +141,7 @@ target_pathway = target_pathway[-rmRows,]
 
 # organizing collections
 # for targets we keep the original (e.g. Itch), for pathways we change and remove redundancies
-target_pathway = target_pathway[-which(target_pathway$collection %in% c("Neuronal","Mast","X2")),] # all in neuroinflammation
-idx = which(target_pathway$collection %in% c("Itch"))
-target_pathway$collection[idx] = "neuroinflammation"
-target_pathway$pathway = str_replace(target_pathway$pathway, "Itch:","neuroinflammation:")
+target_pathway = target_pathway[-which(target_pathway$collection %in% c("Neuronal","Mast","X2","Itch")),] # all in neuroinflammation
 
 idx = which(target_pathway$pathway %in% c("th2:lichenification","th2:Terminal_Differentiation_and_Lipids"))
 target_pathway$pathway[idx] = str_replace(target_pathway$pathway[idx],"th2:","epidermis:")
@@ -163,10 +160,10 @@ target_pathway <- downloadFromBQ(bqdataset = "s05_atopic_dermatitis", tableName 
 intersect(colnames(PathwayMetadata),colnames(dz))
 setdiff(colnames(PathwayMetadata),colnames(dz))
 dz <- dz %>%
-  dplyr::mutate(adjusted=submodel=="adjusted",Disease="AD") %>%
-  dplyr::rename(neglog10FDR=log10_fdr)
+  dplyr::mutate(adjusted=(submodel=="adjusted"),Disease="AD") %>%
+  dplyr::rename(neglog10FDR=log10_fdr, DZ_change = DZ.change)
 
-dz <- dz[,intersect(colnames(PathwayMetadata),colnames(dz))]  
+dz <- dz[,intersect(colnames(PathwayMetadata),colnames(dz))]
 
 target_pathway$ID <- target_pathway$pathway
 
@@ -177,9 +174,9 @@ length(setdiff(dz$ID,target_pathway$ID))
 dz$name_lowercase <- trimws(tolower(dz$ID))
 target_pathway$name_lowercase <- trimws(tolower(target_pathway$ID))
 
-intersect(unique(target_pathway$name_lowercase),unique(dz$name_lowercase)) # 2574
-setdiff(unique(target_pathway$name_lowercase),unique(dz$name_lowercase)) # 880
-setdiff(unique(dz$name_lowercase),unique(target_pathway$name_lowercase)) # 65
+length(intersect(unique(target_pathway$name_lowercase),unique(dz$name_lowercase))) # 2574
+length(setdiff(unique(target_pathway$name_lowercase),unique(dz$name_lowercase))) # 880
+length(setdiff(unique(dz$name_lowercase),unique(target_pathway$name_lowercase))) # 65
 
 grep("\\(",setdiff(unique(target_pathway$name_lowercase),unique(dz$name_lowercase)),ignore.case = T,value = T)
 grep("\\(",setdiff(unique(dz$name_lowercase),unique(target_pathway$name_lowercase)),ignore.case = T,value = T)
@@ -204,15 +201,14 @@ target_pathway$name_lowercase <- gsub("reactome:defective dpm3 causes dpm3-cdg",
 target_pathway$name_lowercase <- gsub("reactome:defective csf2ra causes smdp4","reactome:defective csf2ra causes pulmonary surfactant metabolism dysfunction 4 (smdp4)",target_pathway$name_lowercase)
 target_pathway$name_lowercase <- gsub("reactome:defective csf2rb causes smdp5","reactome:defective csf2rb causes pulmonary surfactant metabolism dysfunction 5 (smdp5)",target_pathway$name_lowercase)
 
-intersect(unique(target_pathway$name_lowercase),unique(dz$name_lowercase)) # 2597
-setdiff(unique(target_pathway$name_lowercase),unique(dz$name_lowercase)) # 857
-setdiff(unique(dz$name_lowercase),unique(target_pathway$name_lowercase)) # 42
+length(intersect(unique(target_pathway$name_lowercase),unique(dz$name_lowercase))) # 2597
+length(setdiff(unique(target_pathway$name_lowercase),unique(dz$name_lowercase))) # 857
+length(setdiff(unique(dz$name_lowercase),unique(target_pathway$name_lowercase))) # 42
 
 # Combine the two tables:
 target_pathway$changeInDisease <- NULL
-target_pathway_with_dz <- unique(target_pathway %>% left_join(dz[,c("name_lowercase","DZ.change","Disease","adjusted")],by="name_lowercase"))
+target_pathway_with_dz <- unique(target_pathway %>% left_join(dz[,c("name_lowercase","DZ_change","Disease","adjusted")],by="name_lowercase"))
 target_pathway_with_dz$name_lowercase <- NULL
-colnames(target_pathway_with_dz)[colnames(target_pathway_with_dz)=="DZ.change"] <- "DZ_change"
 colnames(target_pathway_with_dz)[colnames(target_pathway_with_dz)=="submodel"] <- "submodel_correlation"
 colnames(target_pathway_with_dz)[colnames(target_pathway_with_dz)=="adjusted"] <- "DZ_is_adjusted"
 
@@ -221,6 +217,62 @@ filtered_target_pathway_with_dz <- target_pathway_with_dz %>%
   filter((submodel_correlation=="adjusted"&DZ_is_adjusted) | (submodel_correlation=="bulk"&!DZ_is_adjusted))
 
 uploadToBQ(filtered_target_pathway_with_dz, bqdataset = "s05_atopic_dermatitis", tableName = "dashboards_target_pathway_Gil")
+
+
+# merging this table with the ontology
+pathways = downloadFromBQ(bqdataset = "s05_atopic_dermatitis", tableName = "dashboards_target_pathway_Gil", pageSize = 20000)
+  pathways$pathway = str_to_lower(pathways$pathway)
+ontology = downloadFromBQ(bqdataset = "s05_atopic_dermatitis", tableName = "ontology_corrected")
+  ontology$pathway_id = str_to_lower(ontology$pathway_id)
+  ontology$pathway_id = str_replace(ontology$pathway_id, "œµ","ε")
+merged = left_join(pathways, ontology, by = join_by("pathway" == "pathway_id"))
+
+merged = merged %>%
+  dplyr::filter(submodel_correlation == "bulk") %>%
+  dplyr::filter(!collection %in% c("Ligands","Positives")) %>%
+  dplyr::filter(target_collection %in% c("Ligands","Positives","X2","negativeControls"))
+
+KEYS <- c("ID")
+THRESH <- 0.4
+
+annot_vs <- function(df, ref_target, thr = THRESH) {
+  ref <- df %>%
+    filter(target == ref_target) %>%
+    select(all_of(KEYS), ref_corr = correlation) %>%
+    distinct()  # expects one ref row per key
+  
+  df = df %>%
+    left_join(ref, by = KEYS) %>%
+    mutate(
+      Shared = case_when(
+        target == ref_target ~ NA_character_,
+        is.na(ref_corr) ~ NA_character_,
+        correlation > thr & ref_corr > thr ~ "Shared",
+        correlation > thr & ref_corr <= thr ~ "target2",
+        correlation <= thr & ref_corr > thr ~ "target1",
+        TRUE ~ "not correlated"
+      )
+    ) %>%
+    dplyr::filter(!is.na(Shared)) %>%
+    select(-level_1, -level_2, -level_3, -level_4) %>%
+    dplyr::rename("Level 1" = "level0")
+  
+  n = df %>%
+    group_by(Shared, `Level 1`, target) %>%
+    summarise("Count Pathways" = n())
+  
+  df %>%
+    left_join(n, by = join_by("Shared","Level 1","target")) %>%
+    mutate(target1 = ref_target) %>%
+    rename(target2 = target) %>%
+    rename(correlation_target2 = correlation, correlation_target1 = ref_corr)
+}
+
+merged_with_shared <- rbind(annot_vs(merged, "IL13"),
+                            annot_vs(merged, "IL4"))
+
+uploadToBQ(merged_with_shared, bqdataset = "s05_atopic_dermatitis", tableName = "dashboards_target_pathways_ontology")
+
 
 ## Pathway volcano
 ## ==========================

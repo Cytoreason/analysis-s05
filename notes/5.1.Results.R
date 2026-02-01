@@ -247,11 +247,18 @@ pushToCC(Results, tagsToPass = list(list(name="object",value="processed_results"
 # wf-47f2a1c1b7 (final version)
 
 
-
 # For all tables but Results_Pathway_PCA we use the previous version in order to have Th1_Related, Th17_Related, Th2_Related
 uploadToBQ(Results$Target_Pathway_PCA, bqdataset = "s05_atopic_dermatitis", tableName = "Results_Pathway_PCA")
 
 Results_old = readRDS(get_workflow_outputs("wf-64470d2a55"))
+Results_old = lapply(Results_old, function(x){
+  x$Target.Collection = sapply(x$Target.ID, function(x) {
+    str_split(x, ":")[[1]][1]
+  })
+  return(x)
+})
+
+
 uploadToBQ(Results_old$DZEnrichment, bqdataset = "s05_atopic_dermatitis", tableName = "Results_DZEnrichment")
 uploadToBQ(Results_old$Target_Cell, bqdataset = "s05_atopic_dermatitis", tableName = "Results_Target_Cell")
 uploadToBQ(Results_old$Target_Gene, bqdataset = "s05_atopic_dermatitis", tableName = "Results_Target_Gene")
