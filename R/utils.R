@@ -95,6 +95,7 @@ uploadToBQ <- function(table, bqdataset, tableName, subsetting = NULL, dispositi
 #' @description downloadFromBQ gets workflow IDs and uploads them to bigquery
 #' @param bqdataset - name of dataset in BQ we want to download from
 #' @param tableName - the table name we want extract from BQ
+#' @param pageSize sometimes the table is too large to download, and this specifies the number of rows requested per download chunk.  It is recommended to leave this unspecified until you have evidence that the page_size selected automatically by bq_table_download() is problematic.
 downloadFromBQ <- function(bqdataset, tableName, pageSize = NULL){
   library(bigrquery)
   
@@ -108,7 +109,11 @@ downloadFromBQ <- function(bqdataset, tableName, pageSize = NULL){
 }
 
 
-# squash_axis for ggplot
+#' @title squash_axis
+#' @description squash_axis reshapes axes in ggplot and sqishes them according to a factor
+#' @param from - the beginning value for the squish
+#' @param to - the end value for the squish
+#' @param factor the factor by which the squish is done
 squash_axis <- function(from, to, factor) { 
   trans <- function(x) { 
     isq <- x > from & x < to & !is.na(x)
@@ -146,30 +151,11 @@ targetColors = c(
   "Positives:IL22" = "#4169E1",
   "Positives:IL33" = "#0D3D8A",
   "Positives:IL31" = "#000080",
-  
-  # # greens
-  # "IL22" = "#c5db87",
-  # "IL20" = "#228B22",
-  # "IL24" = "#648D62",
-  # "IL26" = "#95c74d",
-  # "IFNG" = "#1C7771",
-  
+
   "X2:x2_activation_early_50_archs_refined" = "#E1B1E1",
   "X2:x2_general_inhibition_early_50_archs_refined" = "#c4007c",
   "X2:x2_activated_inhibition_early_50_archs_refined" = "#df9aa0",
-  # "X2:SP_general_inhibition_late_50_archs_refined" = "#CD5C5C",
 
-  # # yellows 
-  # "CTLA4" = "#FFF176",
-  # "PDL1" = "#FFD933",
-  # "PD1" = "#FFD933",
-  # "BTLA" = "#bfb64d",
-  
-  # # oranges
-  # "TNFA" = "#FF8C00",
-  # "OX40" = "#FFA500",
-  # "TNF_mono" = "#FF8C00",
-  
   "X2:aIgE_activation_late_50" = "#D2B48C",
   "X2:aIgE_activation_late_50_archs_refined" = "#A0522D",
   
