@@ -20,7 +20,7 @@ genes <- unique(gxdiff$feature_id)
 nc = list(nc_50 = sample_gene_sets(genes, sigSize = 50, nPerm = nPerm),
           nc_100 = sample_gene_sets(genes, sigSize = 100, nPerm = nPerm))
                            
-pushToCC(nc, tagsToPass = list(list(name="object",value="randomNC"))) # wf-
+pushToCC(nc, tagsToPass = list(list(name="object",value="randomNC"))) # wf-c4a7350719
 
 overlap_50 = sapply(nc$nc_50, function(x) sapply(nc$nc_50, function(y) length(intersect(x,y))))
 overlap_100 = sapply(nc$nc_100, function(x) sapply(nc$nc_100, function(y) length(intersect(x,y))))

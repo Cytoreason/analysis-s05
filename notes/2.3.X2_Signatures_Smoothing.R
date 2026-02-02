@@ -4,12 +4,11 @@ library(cytoreason.patern)
 library(tidyverse)
 
 
-# Vector prep
-# =================================
+## 1. Vector prep
+## =================================
 gxdiff = readRDS(get_workflow_outputs("wf-fe0c7701a0"))
 gxdiff <- gxdiff %>%
-  mutate(signedP = sign(estimate) * log10_pvalue) %>%
-  mutate(estimate_logp = estimate * log10_pvalue)
+  mutate(signedP = sign(estimate) * log10_pvalue)
 
 fc_mat_p = reshape2::dcast(gxdiff, feature_id ~ comparison, value.var = "signedP")
 fc_mat_p = column_to_rownames(fc_mat_p, var = "feature_id")
@@ -23,8 +22,8 @@ tryptase["7177",] <- 1
 
 alphas <- 0.75
 
-# Propagation in ARCHS
-# =================================
+## 2. Propagation in ARCHS
+## =================================
 # adj_matrix <- readRDS(get_task_outputs('wf-3917825f8b','0'))
 adj_matrix = consume_workflow_task_output("wf-3917825f8b", task_id = 0)
 tags <- list(list(name="service", value="patern"),
