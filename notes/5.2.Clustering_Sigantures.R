@@ -73,9 +73,10 @@ clust = cutree(clust, k=4) %>% # first split to 6, then join a few
   mutate(new_cluster = cluster)
 
 # reorder number
-clust$new_cluster[which(clust$cluster == 1)] <- 3
-clust$new_cluster[which(clust$cluster == 2)] <- 1
+clust$new_cluster[which(clust$cluster == 1)] <- 4
+clust$new_cluster[which(clust$cluster == 2)] <- 3
 clust$new_cluster[which(clust$cluster == 3)] <- 2
+clust$new_cluster[which(clust$cluster == 4)] <- 1
 
 clust = arrange(clust, new_cluster)
 pushToCC(clust, tagsToPass = list(list(name="object",value="clustering_bulkadj_allcellsandpathways")))
@@ -83,7 +84,7 @@ pushToCC(clust, tagsToPass = list(list(name="object",value="clustering_bulkadj_a
 # wf-99bb4eb731
 # wf-3fb25d04de - reducing number of targets
 # wf-42b768e5ef - reduced number of targets, no negative controls (with randoms)
-
+# wf-ebb84b9e00 - reduced number of targets, no negative controls (with randoms) - order cor
 
 ## Pathways driving the differences between clusters
 ## ===========================================================
@@ -207,6 +208,7 @@ pushToCC(loadings, tagsToPass = list(list(name="object",value="clustering_bulkan
 # wf-9d626a0fba - reduced number of targets - 5 clusters
 # wf-19e0a44ad8 - reduced number of targets - no negative controls
 # wf-7f9bd9ed3a - reduced number of targets - no negative controls, with randoms
+# wf-59b8286f84 - reduced number of targets - no negative controls, with randoms - correct order
 
 pushToCC(toploadings, tagsToPass = list(list(name="object",value="clustering_bulkandadj_cellsandpathways"),list(name="analysis",value="toploadings")))
 # wf-f2617daae8
@@ -215,13 +217,14 @@ pushToCC(toploadings, tagsToPass = list(list(name="object",value="clustering_bul
 # wf-d186aba404 - reduced number of targets - 5 clusters
 # wf-cdf93bcad1 - reduced number of targets - no negative controls
 # wf-cf96ac6fbf - reduced number of targets - no negative controls, with randoms
+# wf-b8a1f49c7e - reduced number of targets - no negative controls, with randoms - correct order
 
 # 3.2. Create a heatmap based on the top differentiating pathways
 # -------------------------------------------------------------------
 library(ComplexHeatmap)
 
-toploadings = readRDS(get_workflow_outputs("wf-cf96ac6fbf"))
-clusters = readRDS(get_workflow_outputs("wf-42b768e5ef")) %>% 
+toploadings = readRDS(get_workflow_outputs("wf-b8a1f49c7e"))
+clusters = readRDS(get_workflow_outputs("wf-ebb84b9e00")) %>% 
   .[-which(.[,"signature"] == "Nattkemper"),] %>% # removing Nattkemper because we also want to correlate to it
   .[!str_detect(.$signature,"TGFB2|BMP"),]
 

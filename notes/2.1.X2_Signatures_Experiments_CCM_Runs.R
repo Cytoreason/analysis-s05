@@ -6,12 +6,15 @@ library(reshape2)
 library(patchwork)
 devtools::load_all("~/analysis-s05/R/utils.R")
 
-# 1. 4hr experiment
+## 1. Pre-Processing experiments
+## ======================================
+# 1.1. 4hr experiment
 # ----------------------
 X2_4hr = readRDS(get_workflow_outputs("wf-cb183f8dad"))
 metadata = read.csv("~/analysis-s05/data/metadata_4h.csv")
 metadata$sample[which(is.na(metadata$inhibitor) & metadata$sample == "CST14-756D3")] <- "CST14D3" # a mistake in the table
 metadata$agonist = str_remove(metadata$agonist,"-")
+# wf-edf6c97bd7
 
 # cbind four designs:
 # 1. per agonist - evo vs uninhibited [paired]
@@ -51,11 +54,10 @@ X2_4hr = ExpressionSet(assayData = assayData(X2_4hr),
                        featureData = featureData(X2_4hr),
                        annotation = "org.Hs.eg.db")
 pushToCC(X2_4hr, tagsToPass = list(list(name="object",value="eset_X2_4hr")))
-# wf-74008e33fd - counts
-# wf-faf98d72b3 - exprs
+# wf-74008e33fd
 
 
-# 1. 24hr experiment
+# 1.2. 24hr experiment
 # ----------------------
 X2_24hr = readRDS(get_workflow_outputs("wf-c973ccb1f5"))
 metadata = read.csv("~/analysis-s05/data/metadata_24h.csv")
@@ -64,6 +66,7 @@ metadata = metadata %>%
   dplyr::filter(paired_end_read == 1) %>%
   mutate(sample = str_remove(sample, "_R1")) %>%
   mutate(sample = str_replace(sample,"D1|D2|D3",paste0("D",donor)))
+# wf-d55a22ebb5
 
 # cbind four designs:
 # 1. per agonist - evo vs uninhibited [paired]
@@ -105,17 +108,17 @@ X2_24hr = ExpressionSet(assayData = assayData(X2_24hr),
                        featureData = featureData(X2_24hr),
                        annotation = "org.Hs.eg.db")
 pushToCC(X2_24hr, tagsToPass = list(list(name="object",value="eset_X2_24hr")))
-# wf-b1d08dc2f1 - counts
-# wf-fee413401f - exprs
+# wf-b1d08dc2f1
 
 
-
-# Constructing a config file & running ccm
-# ---------------------------------------------
+## 2. Constructing a config file & running ccm
+## ==================================================
+# 2.1. Config file
+# --------------------
 meta_4hr = readRDS(get_workflow_outputs("wf-74008e33fd"))@phenoData@data
 meta_24hr = readRDS(get_workflow_outputs("wf-b1d08dc2f1"))@phenoData@data
-write.csv(meta_4hr, "~/analysis-s05/data/metadata_final_4h.csv")
-write.csv(meta_24hr, "~/analysis-s05/data/metadata_final_24h.csv")
+write.csv(meta_4hr, "~/analysis-s05/data/metadata_final_4h.csv") # wf-9a8630e0c0
+write.csv(meta_24hr, "~/analysis-s05/data/metadata_final_24h.csv") # wf-c1bd5aea89
 
 comparisonName = function(colname){
   ifelse(str_detect(colname,"_activated|_inhibited") & !str_detect(colname, "inhibited_vs_activated"), str_split_fixed(colname,"_",n = 2)[[2]], colname)
@@ -188,10 +191,11 @@ config$comparison_id[idx_24hr] = paste0(names(idx_24hr),"_24hr")
 write.csv(config, "~/analysis-s05/data/X2_config.csv", row.names = F)
 pushToCC(config, tagsToPass = list(list(name="object",value="config"),
                                    list(name="project",value="X2_Signatures")))
-# wf-2fa2e07dd0 - counts
-# wf-f591b7e333 - exprs
+# wf-2fa2e07dd0
 
 
+# 2.2. CCM run
+# -------------------
 # local test first
 ccm_stage_prepare_dataset_collection(config) # you need to have a folder called 'output' in the current wd
 
@@ -201,13 +205,12 @@ ccm_api_generate_ccm(config = config,
                      model = .skip('gene_cell_correlations','cell_cell_correlations','feature_cell_correlations','pheno_feature_correlations',
                                    'cell_specific_differences','gene_set_activity_differences','survival_analysis_tme'),
                      image = "master@0.72.0")
-# generate_ccm -- Sun Nov 23 12:28:26 2025: wf-b3318c6d1e [] - exprs
-# generate_ccm -- Sun Nov 23 15:09:46 2025: wf-696ca67797 [] - counts
+# generate_ccm -- Sun Nov 23 15:09:46 2025: wf-696ca67797 []
 
 
 
-## Processing the results
-## ------------------------------------------
+## 3. Processing the results
+## =====================================
 ccm = as_ccm_fit("wf-696ca67797")
 
 allOptions = lapply(names(ccm$datasets), function(dataset){
@@ -238,17 +241,15 @@ gx_binded = do.call(rbind, gx)
 gsa_binded = do.call(rbind, gsa)
 uploadToBQ(gx_binded, bqdataset = "s05_atopic_dermatitis", tableName = "X2Signatures_gxdiff")
 pushToCC(gx_binded, tagsToPass = list(list(name="analysis",value="gx_diff"),list(name="project",value="X2")))
-# wf-12254175c7 - exprs
-# wf-fe0c7701a0 - counts
+# wf-fe0c7701a0
 
 uploadToBQ(gsa_binded, bqdataset = "s05_atopic_dermatitis", tableName = "X2Signatures_gxgsea")
 pushToCC(gsa_binded, tagsToPass = list(list(name="analysis",value="gx_gsa"),list(name="project",value="X2")))
-# wf-9d65578ccc - exprs
-# wf-e6a03c52ab - counts
+# wf-e6a03c52ab
 
 
-# Clean graph for Evommune
-# ------------------------------
+## 4. Visualization
+## ===============================
 gx = readRDS(get_workflow_outputs("wf-fe0c7701a0"))
 gx$term = droplevels(gx$term)
 gx$agonist[str_detect(gx$agonist, "All")] <- "Pooled"
