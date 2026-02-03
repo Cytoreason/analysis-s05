@@ -1,0 +1,129 @@
+acinar cell of sebaceous gland	CRCL_0000368
+activated keratinocyte	CRCL_0000385
+alpha-beta T cell	CRCL_0000040
+alternatively activated macrophage	CRCL_0000160
+antibody secreting cell	CRCL_0000057
+artery endothelial cell	CRCL_0000110
+B cell	CRCL_0000014
+basal cell of epidermis	CRCL_0000370
+blood endothelial cell	CRCL_0000004
+capillary endothelial cell	CRCL_0000084
+CD4+ memory T cell	CRCL_0000047
+CD4+ T cell	CRCL_0000027
+CD4+ T helper	CRCL_0000016
+CD8+ memory T cell	CRCL_0000054
+CD8-positive, alpha-beta T cell	CRCL_0000028
+CD16+ natural killer cell	CRCL_0000226
+CD19+ B cell	CRCL_0000076
+CD56+ natural killer cell	CRCL_0000225
+central memory CD4+ T cell	CRCL_0000051
+central memory CD8+ T cell	CRCL_0000053
+classical monocyte	CRCL_0000121
+contractile pericyte	CRCL_0000414
+conventional dendritic cell	CRCL_0000069
+conventional dendritic cell 1	CRCL_0000207
+conventional dendritic cell 2	CRCL_0000208
+dendritic cell	CRCL_0000015
+differentiated keratinocyte	CRCL_0000388
+ecto-epithelial cell	CRCL_0000367
+effector memory CD4-positive, alpha-beta T cell	CRCL_0000052
+effector memory CD8+ T cell	CRCL_0000055
+endothelial cell	CRCL_0000010
+endothelial cell of vascular tree	CRCL_0000083
+eosinophil	CRCL_0000359
+epidermal cell	CRCL_0000350
+epidermal melanocyte	CRCL_0000524
+epithelial cell	CRCL_0000003
+epithelial cell of skin gland	CRCL_0000372
+epithelial cell of sweat gland	CRCL_0000383
+fat cell	CRCL_0000345
+fibroblast	CRCL_0000002
+follicular melanocyte	CRCL_0000525
+gamma-delta T cell	CRCL_0000042
+general ecto-epithelial cell	CRCL_0000369
+glial cell	CRCL_0000011
+granular cell of epidermis	CRCL_0000371
+granulocyte	CRCL_0000006
+hair follicle dermal papilla cell	CRCL_0000349
+hair follicle epithelial cell	CRCL_0000389
+hair germinal matrix cell	CRCL_0000379
+hematopoietic cell	CRCL_0000068
+IgA plasma cell	CRCL_0000067
+IgE plasma cell	CRCL_0000058
+IgG plasma cell	CRCL_0000065
+IgM plasma cell	CRCL_0000066
+inflammatory fibroblast	CRCL_0000117
+inflammatory macrophage	CRCL_0000134
+inflammatory skin fibroblast	CRCL_0000392
+innate lymphoid cell	CRCL_0000073
+innate lymphoid cell 1	CRCL_0000074
+innate lymphoid cell 2	CRCL_0000163
+innate lymphoid cell 3	CRCL_0000164
+inner root sheath cell	CRCL_0000377
+intermediate monocyte	CRCL_0000235
+keratinocyte	CRCL_0000348
+Langerhans cell	CRCL_0000351
+leukocyte	CRCL_0000031
+long lived plasma cell	CRCL_0000060
+lymphatic endothelial cell	CRCL_0000082
+lymphocyte	CRCL_0000019
+lymphocyte of B lineage	CRCL_0000056
+macrophage	CRCL_0000119
+mast cell	CRCL_0000009
+mature alpha-beta T cell	CRCL_0000041
+mature B cell	CRCL_0000036
+mature natural killer cell	CRCL_0000224
+melanocyte	CRCL_0000346
+memory B cell	CRCL_0000038
+mesenchymal stem cell	CRCL_0000344
+meso-epithelial cell	CRCL_0000081
+mesoderm derived cell	CRCL_0000459
+microvascular endothelial cell	CRCL_0000112
+migratory conventional dendritic cell	CRCL_0000209
+monocyte	CRCL_0000022
+monocyte derived macrophage	CRCL_0000133
+mononuclear cell	CRCL_0000045
+mononuclear phagocyte	CRCL_0000120
+muscle cell	CRCL_0000317
+myeloid cell	CRCL_0000467
+myeloid dendritic cell	CRCL_0000035
+myeloid leukocyte	CRCL_0000032
+myofibroblast	CRCL_0000122
+naive B cell	CRCL_0000039
+naive CD4+ T cell	CRCL_0000046
+naive CD8+ T cell	CRCL_0000050
+natural killer cell	CRCL_0000026
+mature NK T cell	CRCL_0000251
+neural cell	CRCL_0000087
+neural crest derived cell	CRCL_0000220
+neuron	CRCL_0000352
+neuron associated cell	CRCL_0000007
+neutrophil	CRCL_0000033
+non malignant antibody secreting cell	CRCL_0000491
+non malignant epithelial cell	CRCL_0000460
+non-B cell lymphocyte	CRCL_0000508
+non-classical monocyte	CRCL_0000146
+non-striated muscle cell	CRCL_0000324
+noncontractile pericyte	CRCL_0000416
+outer root sheath cell	CRCL_0000378
+pericyte	CRCL_0000029
+plasma cell	CRCL_0000037
+plasmacytoid dendritic cell	CRCL_0000244
+prickle cell	CRCL_0000354
+regulatory T cell	CRCL_0000044
+resident memory CD4+ T cell	CRCL_0000393
+resident memory CD8+ T cell	CRCL_0000394
+Schwann cell	CRCL_0000380
+skin fibroblast	CRCL_0000381
+skin myofibroblast cell	CRCL_0000395
+smooth muscle cell	CRCL_0000318
+stromal cell	CRCL_0000017
+structural skin fibroblast	CRCL_0000396
+subcutaneous fat cell	CRCL_0000376
+T cell	CRCL_0000005
+T peripheral helper	CRCL_0000434
+T-helper 1 cell	CRCL_0000020
+T-helper 17 cell	CRCL_0000049
+unclassified CD4 T cell	CRCL_0000295
+unclassified CD8 T cell	CRCL_0000296
+vein endothelial cell	CRCL_0000090
